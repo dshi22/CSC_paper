@@ -1,0 +1,77 @@
+**Descriptive statistics - Table 1**
+Below is the R code used to generate Table 1.  
+For Appendix Tables 1–5, the same code is applied with different input data files.
+
+# working directory ------------------------------------------------------
+data_dir <- "P:/.../.../data/"
+
+# load packages -----------------------------------------------------------
+library(data.table)
+library(dplyr)
+
+# load the file -----------------------------------------------------------
+health_out <- fread(paste0(data_dir, "health_out.csv"))
+health_out_unique <- health_out[,.SD[1],by="m_encrypted_hesid"]
+health_out[, .N, by = highest_CSC]
+health_out_unique[, .N, by = highest_CSC]
+
+#descriptive statistics - mean (SD) ---------------------------------------
+#total
+health_out_unique[,.(mean_matage = round(mean(matage_first, na.rm = TRUE), 2),
+                     sd_matage = round(sd(matage_first, na.rm = TRUE), 2),
+                     n= .N),]
+
+#by highest CSC
+health_out_unique[,.(mean_matage = round(mean(matage_first, na.rm = TRUE),2),
+                     sd_matage = round(sd(matage_first, na.rm = TRUE),2),
+                     n= .N),
+                  by = highest_CSC]
+
+# select certain variables ------------------------------------------------
+health_out <- health_out[,.(sex,imd_5,matage_bin,first_child,highest_CSC,birweit_bin,gestat_bin)]
+health_out_unique <- health_out_unique[,.(m_ethnos_group,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin,highest_CSC,matage_first)]
+
+#descriptive statistics - N (%) -------------------------------------------
+library(dplyr)
+library(tidyr)
+
+npct_fmt <- function(x){
+  tab <- table(x, useNA = "ifany")
+  pct <- prop.table(tab) * 100
+  tab_rounded <- floor(tab / 10 + 0.5) * 10
+  pct_rounded <- floor(pct + 0.5)
+  out <- sapply(seq_along(tab), function(i){
+    label <- names(tab)[i]
+    n_val <- tab_rounded[i]
+    pct_val <- pct_rounded[i]
+    paste0(label, ":", n_val, " (", pct_val, "%)")
+  })
+  paste(out, collapse = "; ")
+}
+
+summarise_npct <- function(data, group_var = NULL) {
+  vars_all <- setdiff(names(data), group_var)
+  data <- data %>%
+    mutate(across(all_of(vars_all), as.character))
+  long_df <- data %>%
+    pivot_longer(
+      cols = all_of(vars_all),
+      names_to = "variable",
+      values_to = "value"
+    )
+  if(is.null(group_var)) {
+    long_df %>%
+      group_by(variable) %>%
+      summarise(summary = npct_fmt(value), .groups = "drop") %>%
+      mutate(Group = "Total") %>%
+      select(Group, everything())
+  } else {
+    long_df %>%
+      group_by(across(all_of(group_var)), variable) %>%
+      summarise(summary = npct_fmt(value), .groups = "keep") %>%
+      mutate(Group = as.character(!!sym(group_var))) %>%
+      select(Group, variable, summary)
+  }
+}
+summary_total <- summarise_npct(health_out)
+summary_byCSC <- summarise_npct(health_out, group_var = "highest_CSC")
