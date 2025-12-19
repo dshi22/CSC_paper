@@ -1,6 +1,6 @@
 **Descriptive statistics - Table 1**
 Below is the R code used to generate Table 1.  
-For Appendix Tables 1–5, the same code is applied with different input data files.
+For Appendix Tables 1-5, the same code is applied with different input data files.
 
 # working directory ------------------------------------------------------
 data_dir <- "P:/.../.../data/"
