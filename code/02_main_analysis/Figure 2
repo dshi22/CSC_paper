@@ -1,0 +1,105 @@
+**Figure 2**
+Below is the R code used to generate Figure 2.
+
+# load packages
+library(ggplot2)
+library(dplyr)
+library(patchwork)
+library(tibble)
+
+# load the data
+df <- tibble::tribble(
+  ~Outcome, ~AgeGroup, ~Exposure, ~RR,  ~Lower, ~Upper, ~InteractionP,
+  "Birth weight", "17-18", "CiN", ..., ..., ..., ...,
+  "Birth weight", "19-24", "CiN", ..., ..., ..., ...,
+  "Birth weight", "17-18", "CPP", ..., ..., ..., ...,
+  "Birth weight", "19-24", "CPP", ..., ..., ..., ...,
+  "Birth weight", "17-18", "CLA", ..., ..., ..., ...,
+  "Birth weight", "19-24", "CLA", ..., ..., ..., ...,
+  "Gestational age", "17-18", "CiN", ..., ..., ..., ...,
+  "Gestational age", "19-24", "CiN", ..., ..., ..., ...,
+  "Gestational age", "17-18", "CPP", ..., ..., ..., ...,
+  "Gestational age", "19-24", "CPP", ..., ..., ..., ...,
+  "Gestational age", "17-18", "CLA", ..., ..., ..., ...,
+  "Gestational age", "19-24", "CLA", ..., ..., ..., ...,
+)
+
+# Remove mortality, rename outcomes and move parentheses to the next line
+df <- df %>%
+  mutate(
+    Outcome = recode(Outcome,
+                     "Birth weight" = "Low birth weight",
+                     "Gestational age" = "Preterm birth"
+    ),
+    Exposure = factor(Exposure, levels = c("CLA", "CPP", "CiN")),
+    AgeGroup = factor(AgeGroup, levels = c("17-18", "19-24")),
+    Outcome = factor(Outcome, levels = c("Low birth weight", "Preterm birth")))
+
+# p-values (without asterisk)
+pvals <- df %>%
+  distinct(Outcome, InteractionP) %>%
+  rename(p = InteractionP) %>%
+  mutate(
+    p_label = ifelse(p < 0.001, "p < 0.001",
+                     paste0("p = ", formatC(p, format = "f", digits = 3)))
+  )
+
+# Colours
+palette <- c("17-18" = "#1B9E77", "19-24" = "#D95F02")
+
+make_panel <- function(outcomes, show_legend = TRUE) {
+  ggplot(df %>% filter(Outcome %in% outcomes),
+         aes(x = RR, y = Exposure, color = AgeGroup, shape = AgeGroup)) +
+    geom_vline(xintercept = 1, linetype = "dashed", linewidth = 0.4, color = "grey50") +
+    geom_errorbarh(aes(xmin = Lower, xmax = Upper),
+                   position = position_dodge(width = 0.6),
+                   height = 0.25, linewidth = 0.8) +
+    geom_point(position = position_dodge(width = 0.6), size = 3) +
+    # x-axis starts from 0.8, increments of 0.2
+    scale_x_continuous(
+      breaks = seq(0.8, 1.4, by = 0.2),
+      limits = c(0.8, 1.4)
+    ) +
+    facet_grid(. ~ Outcome, scales = "fixed") +
+    scale_color_manual(values = palette) +
+    labs(x = "Risk Ratio", y = NULL, color = "Age Group", shape = "Age Group") +
+    theme_minimal(base_size = 12) +
+    theme(
+      # centre the legend above the plot
+      legend.position = if (show_legend) "top" else "none",
+      legend.direction = "horizontal",
+      legend.justification = "center",
+      # display strip at the top
+      strip.placement = "outside",
+      strip.text = element_text(angle = 0, face = "bold", size = 12, hjust = 0.5),
+      panel.grid.major.y = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.text.y = element_text(margin = margin(r = 8), hjust = 0),
+      plot.margin = margin(5, 30, 5, 30)
+    ) +
+    # p-value positioned at the top-right
+    geom_text(
+      data = pvals %>% filter(Outcome %in% outcomes),
+      aes(x = 1.4, y = Inf, label = p_label),
+      inherit.aes = FALSE,
+      hjust = 1, vjust = 1.2,
+      size = 4, fontface = "bold", color = "black"
+    )
+}
+
+# Left and right columns
+left_outcomes  <- c("Low birth weight")
+right_outcomes <- c("Preterm birth")
+
+left_plot  <- make_panel(left_outcomes,  show_legend = FALSE)
+right_plot <- make_panel(right_outcomes, show_legend = TRUE)
+
+final_plot <- left_plot + right_plot +
+  plot_layout(ncol = 2, widths = c(1, 1), guides = "collect") & 
+  theme(
+    legend.position = "top",
+    legend.direction = "horizontal",
+    legend.title.align = 0.5
+  )
+
+print(final_plot)
