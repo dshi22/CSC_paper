@@ -155,6 +155,10 @@ ggplot(bw_results_dt,aes(x = reorder(variable,-statistic),y = statistic)) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
+### subgroup analyses ------------------------------------------------------
+birweit <- birweit[matage_bin == 1]
+birweit <- birweit[matage_bin == 0]
+
 ## logistic regression uni -------------------------------------------------
 model_bw_uni <- glm(birweit_bin ~ highest_CSC, 
                     data = birweit, 
@@ -276,6 +280,10 @@ ggplot(gestat_results_dt,aes(x = reorder(variable,-statistic),y = statistic)) +
   labs(title = "Gestational age - Variables", x = "Variables",y = "Statistics") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+### subgroup analyses ------------------------------------------------------
+gestat <- gestat[matage_bin == 1]
+gestat <- gestat[matage_bin == 0]
 
 ## logistic regression uni -------------------------------------------------
 model_gestat_uni <- glm(gestat_bin ~ highest_CSC, 
