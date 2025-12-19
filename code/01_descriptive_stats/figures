@@ -1,192 +1,76 @@
 ###Descriptive statistics
 
-**Figure 1**
-# working directory ------------------------------------------------------
-data_dir <- "P:/.../.../data/"
-
 # load packages -----------------------------------------------------------
+library(readr)
 library(dplyr)
 library(tidyr)
 library(binom)
 library(ggplot2)
 library(scales)
 library(patchwork)
-library(data.table)
 
+**Figure 1**
 # CSC * matage ~ out =======================================================
 ## load the file -----------------------------------------------------------
-health_out <- fread(paste0(data_dir,"health_out.csv"))
-health_out_age1 <- fread(paste0(data_dir,"health_out_age1.csv"))
-health_out_age1_5 <- fread(paste0(data_dir,"health_out_age1_5.csv"))
+AR_CSC <- fread(paste0("D:/.../.../.../.../AR_CSC.csv"))
 
-sum(is.na(health_out$highest_CSC))
-sum(is.na(health_out$matage))
+## draw the table-----------------------------------------------------------
+library(ggplot2)
+library(dplyr)
+library(patchwork)
 
-## order CSC & matage_bin --------------------------------------------------
-AR_CSC$highest_CSC <- factor(AR_CSC$highest_CSC, levels = c("non-csc","cin","cpp","cla"))
-AR_CSC$matage_bin <- factor(AR_CSC$matage_bin, levels = c(1,0), labels = c("17-18","19-24"))
+# Fix the order of the x-axis and relabel
+AR_CSC$highest_CSC <- factor(AR_CSC$highest_CSC,
+                             levels = c("non-csc","cin","cpp","cla"),
+                             labels = c("non-CSC","CiN","CPP","CLA"))
 
-health_out_age1$highest_CSC <- factor(health_out_age1$highest_CSC, levels = c("non-csc","cin","cpp","cla"))
-health_out_age1$matage_bin <- factor(health_out_age1$matage_bin, levels = c(1,0), labels = c("17-18","19-23"))
+# Colour mapping: 17-18 blue, 19/19-23/19-24 green
+age_colors <- c("17-18"="#1f78b4", "19"="#33a02c", "19-23"="#33a02c", "19-24"="#33a02c")
 
-health_out_age1_5$highest_CSC <- factor(health_out_age1_5$highest_CSC, levels = c("non-csc","cin","cpp","cla"))
-health_out_age1_5$matage_bin <- factor(health_out_age1_5$matage_bin, levels = c(1,0), labels = c("17-18","19"))
-
-## define outcomes ---------------------------------------------------------
-health_out_list <- c("birweit_bin","gestat_bin")
-health_out_age1_list <- c("infant_death","unplanned_admission_1","AE_1")
-health_out_age1_5_list <- c("unplanned_admission_1_5","AE_5")
-
-## binary out: AR + Wilson CI ----------------------------------------------
-compute_risk_df <- function(df, outcome_vec, dataset_name){
-  results <- list()
+# Function to draw a plot
+plot_AR <- function(df_sub, y_max = NULL, title){
+  if(is.null(y_max)){
+    y_max <- ceiling(max(df_sub$upper*100, df_sub$prop*100, na.rm = TRUE)*10)/10
+  }
   
-  for(outvar in outcome_vec){
-    df_sub <- df %>% filter(!is.na(.data[[outvar]]))
-    
-    df_risk <- df_sub %>%
-      group_by(highest_CSC, matage_bin) %>%
-      summarise(
-        n_total = n(),
-        events = sum(.data[[outvar]] == 1, na.rm = TRUE),
-        .group = "drop"
-      ) %>%
-      rowwise() %>%
-      mutate(
-        n_total = floor(n_total / 10 + 0.5) * 10,
-        events = floor(events / 10 + 0.5) * 10,
-        tmp = binom.confint(events, n_total, method="wilson")[1, c("lower","upper","mean")],
-        outcome = outvar,
-        dataset = dataset_name
-        ) %>%
-      unnest_wider(tmp) %>%
-      rename(prop = mean) %>%
-      mutate(
-        lower = as.numeric(lower),
-        upper = as.numeric(upper),
-        prop = as.numeric(prop)
-      )
-    results[[outvar]] <- df_risk
-    }
-  bind_rows(results)
-}
-
-risk_health <- compute_risk_df(health_out, health_out_list, "health_out")
-risk_age1 <- compute_risk_df(health_out_age1, health_out_age1_list, "health_out_age1")
-risk_age1_5 <- compute_risk_df(health_out_age1_5, health_out_age1_5_list, "health_out_age5")
-
-AR_CSC <- bind_rows(risk_health,risk_age1,risk_age1_5)
-
-## Export csv --------------------------------------------------------------
-fwrite(AR_CSC, paste0(data_dir, "AR_CSC.csv"))
-
-## draw the table--------------------------------------------------------
-plot_outcome_group <- function(df_plot, outcome_vec, outcome_titles, group_name){
-  plots <- list()
-  for(i in seq_along(outcome_vec)){
-  df_sub <- df_plot %>% filter(outcome == outcome_vec[i]) %>% ungroup()
-  if(nrow(df_sub) == 0) next
-  
-  y_min <- 0
-  y_max <- max(df_sub$upper, df_sub$prop, na.rm=TRUE)
-  y_margin <- (y_max - y_min) * 0.10
-  y_limits <- c(0,min(1, y_max + y_margin))
-  
-  p <- ggplot(df_sub, aes(x=highest_CSC, y=prop, color=matage_bin)) +
-    geom_point(position=position_dodge(width=0.5), size=3) +
-    geom_errorbar(aes(ymin=.data[["lower"]], ymax=.data[["upper"]]),
-                  position = position_dodge(width = 0.5), 
-                  width = 0.2, 
-                  linewidth = 0.7) +
-    scale_y_continuous(labels=scales::percent_format(accuracy = 0.1),
-                       limits=y_limits,
-                       expand = expansion(mult = c(0,0.02))) +
-    scale_color_manual(
-      values = c("17-18"="#1f78b4","19"="#33a02c","19-23"="#33a02c","19-24"="#33a02c")
-    ) + #change the age range for different subgroups
-    labs(x="Maternal CSC experience", y="AR (%)", color="Maternal age", title=outcome_titles[i]) +
-    theme_classic(base_size=12) +
-    theme(plot.title = element_text(face = "bold", hjust=0.5),
+  ggplot(df_sub, aes(x = highest_CSC, y = prop*100, color = matage_bin)) +
+    geom_point(position = position_dodge(width = 0.5), size = 3) +
+    geom_errorbar(aes(ymin = lower*100, ymax = upper*100),
+                  width = 0.2, position = position_dodge(width = 0.5), size = 0.7) +
+    scale_y_continuous(limits = c(0, y_max),
+                       breaks = scales::pretty_breaks(n=5)) +
+    scale_color_manual(values = age_colors) +
+    labs(x="Maternal CSC experience", y="AR (%)", color="Maternal age", title=title) +
+    theme_classic(base_size = 12) +
+    theme(plot.title = element_text(face="bold", hjust=0.5),
           legend.position = "top",
           axis.text.x = element_text(angle=0,hjust=0.5))
-  
-  plots[[i]] <- p
-  }
-  combined <- patchwork::wrap_plots(plots, ncol=length(plots)) +
-    plot_annotation(title = group_name, theme = theme(plot.title = element_text(face="bold", hjust=0.5)))
-  return(combined)
 }
 
-plot_birth <- plot_outcome_group(AR_CSC,health_out_list, c("Low birth weight","Preterm birth"), "")
-plot_mort <- plot_outcome_group(AR_CSC,health_out_age1_list, "Infant mortality", "")
-plot_age1 <- plot_outcome_group(AR_CSC,health_out_age1_list, c("\u2265 1 Unplanned admission 0-1y","\u2265 1 A&E attendance 0-1y"), "")
-plot_age1_5 <- plot_outcome_group(AR_CSC,health_out_age1_5_list, c("\u2265 1 Unplanned admission 1-5y","\u2265 1 A&E attendance 1-5y"), "")
+# Generate each plot
+p1a <- plot_AR(filter(AR_CSC, outcome=="birweit_bin"), 15, "1a. Low birthweight")
+p1b <- plot_AR(filter(AR_CSC, outcome=="gestat_bin"), 15, "1b. Preterm birth")
+p1c <- plot_AR(filter(AR_CSC, outcome=="infant_death"), 1.2, "1c. Infant mortality")
+p1d <- plot_AR(filter(AR_CSC, outcome=="unplanned_admission_1"), 100, "1d. ≥1 Unplanned admission (0-1y)")
+p1e <- plot_AR(filter(AR_CSC, outcome=="unplanned_admission_1_5"), 100, "1e. ≥1 Unplanned admission (1-5y)")
+p1f <- plot_AR(filter(AR_CSC, outcome=="AE_1"), 100, "1f. ≥1 A&E attendance (0-1y)")
+p1g <- plot_AR(filter(AR_CSC, outcome=="AE_5"), 100, "1g. ≥1 A&E attendance (1-5y)")
 
-plot_birth
-plot_mort
-plot_age1
-plot_age1_5
-
-combined <- 
-  (plot_birth[[1]] | plot_birth[[2]] | plot_mort[[1]]) /
-  (plot_spacer() | plot_age1[[1]] | plot_age1_5[[1]] | plot_spacer()) /
-  (plot_spacer() | plot_age1[[2]] | plot_age1_5[[2]] | plot_spacer()) +
+# 3-2-2 layout with centred alignment
+combined <- (p1a | p1b | p1c) /
+  (plot_spacer() | p1d | p1e | plot_spacer()) /
+  (plot_spacer() | p1f | p1g | plot_spacer()) +
   plot_annotation(title = "") &
   theme(legend.position = "bottom")
+
 combined
 
 **Appendix Figure 2**
 # maternal age ~ out =======================================================
-#load packages
-library(readr)
-library(dplyr)
-library(tidyr)
-library(ggplot2)
+## load the file ----------------------------------------------------------
+AR_matage <- fread(paste0("D:/.../.../.../.../AR_matage.csv"))
 
-## define outcomes ---------------------------------------------------------
-#define outcomes
-health_out_list <- c("birweit_bin","gestat_bin")
-health_out_age1_list <- c("infant_death","unplanned_admission_1","AE_1")
-health_out_age1_5_list <- c("unplanned_admission_1_5","AE_5")
-
-#general function while excluded NA per outcome
-compute_absolute_risk <- function(df,outcome_col){
-  round10 <- function(x) floor(x / 10 + 0.5) * 10
-  df_clean <- df %>%
-    select(matage, all_of(outcome_col)) %>%
-    filter(!is.na(.data[[outcome_col]]))
-  df_clean %>%
-    group_by(matage) %>%
-    summarise(
-      denom = n(),
-      events = sum(.data[[outcome_col]] == 1),
-      .group = "drop"
-    ) %>%
-    mutate(
-      denom = round10(denom),
-      events = round10(events),
-      risk = events / denom,
-      outcome = outcome_col) %>%
-    select(matage, outcome, denom, events, risk)
-}
-
-#compute three results separately
-birth_results <- lapply(health_out_list, compute_absolute_risk, df = health_out) %>%
-  bind_rows()
-y1_results <- lapply(health_out_age1_list, compute_absolute_risk, df = health_out_age1) %>%
-  bind_rows()
-y1_5_results <- lapply(health_out_age1_5_list, compute_absolute_risk, df = health_out_age1_5) %>%
-  bind_rows()
-
-#combine three results
-AR_matage <- bind_rows(birth_results,y1_results,y1_5_results) %>%
-  arrange(matage,outcome)
-
-## Export csv --------------------------------------------------------------
-fwrite(AR_matage, paste0(data_dir, "AR_matage.csv"))
-
-# graphs separate ---------------------------------------------------------
-## graphs all together ----------------------------------------------------
+## draw the figure --------------------------------------------------------
 AR_matage <- AR_matage %>%
   mutate(
     outcome_label = case_when(
