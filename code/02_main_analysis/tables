@@ -1,0 +1,1145 @@
+**Main analysis for all health and educational outcomes: Table 2 + values in Figure 2**
+The main analyses were conducted using Poisson regression with robust standard errors clustered by siblings (children born to the same mother).  
+Interaction analyses (maternal age × maternal CSC experience and first birth × maternal CSC experience) were performed using Wald tests with cluster-robust standard errors (clustered by mother).
+
+- **Univariable analysis:** `logistic regression uni`  
+- **Multivariable analysis:** `logistic regression multi`  
+- **Interaction analysis:**  
+  - First birth × maternal CSC experience: `logistic regression multi (sensitivity analysis)`  
+  - Maternal age × maternal CSC experience: `logistic regression multi (interaction term)`
+
+# working directory ------------------------------------------------------
+master_dir <- "P:/.../.../"
+steffi_dir <- "P:/.../.../.../.../"
+data_dir <- "P:/.../.../.../"
+
+# load packages -----------------------------------------------------------
+library(data.table)
+library(dplyr)
+
+library(ggplot2)
+
+library(sandwich)
+library(broom)
+
+library(car)
+library(lmtest)
+
+# load the file -----------------------------------------------------------
+health_out <- fread(paste0(data_dir,"health_out.csv"))
+health_out_age1 <- fread(paste0(data_dir,"health_out_age1.csv"))
+health_out_age1_5 <- fread(paste0(data_dir,"health_out_age1_5.csv"))
+edu_out <- fread(paste0(data_dir, "edu_out.csv"))
+
+# adjust the data =========================================================
+# change blank to NA ------------------------------------------------------
+health_out[PupilMatchingRefAnonymous == "", PupilMatchingRefAnonymous := NA]
+health_out_age1[PupilMatchingRefAnonymous == "", PupilMatchingRefAnonymous := NA]
+health_out_age1_5[PupilMatchingRefAnonymous == "", PupilMatchingRefAnonymous := NA]
+
+# change reference group --------------------------------------------------
+health_out[highest_CSC == "", highest_CSC := "non-csc"]
+health_out$highest_CSC <- factor(health_out$highest_CSC,levels = c("non-csc","cin","cpp","cla"))
+levels(health_out$highest_CSC)
+health_out$m_ethnos_group <- as.factor(health_out$m_ethnos_group)
+health_out$m_ethnos_group <- relevel(health_out$m_ethnos_group, ref = "White")
+health_out$imd_5 <- factor(health_out$imd_5,levels = c("5","4","3","2","1"))
+
+health_out[,.N,by=(highest_CSC)]
+
+# change KS4 not achieved from 0 to 1 (easy to interpret RR) --------------
+health_out[, KS4_bin := fifelse(KS4_bin == "0", "1",
+                                fifelse(KS4_bin == "1", "0", KS4_bin))]
+
+#**************************************************************************
+# health outcomes
+#**************************************************************************
+
+# CSC ~ covariates =========================================================
+## select variables --------------------------------------------------------
+#model for birth outcomes
+model <- health_out[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,birweit_bin,gestat_bin,sex,imd_5,m_ethnos_group,first_child,matage_bin,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
+#model for health outcomes within 1 year
+model <- health_out_age1[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,infant_death,unplanned_admission_1,AE_1,sex,imd_5,m_ethnos_group,first_child,matage_bin,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
+#model for health outcomes between ages 1-5
+model <- health_out_age1_5[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,unplanned_admission_1_5,AE_5,sex,imd_5,m_ethnos_group,first_child,matage_bin,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
+#model for edu outcome
+model <- edu_out[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,eyfsp_gld,sex,imd_5,m_ethnos_group,first_child,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
+
+#randomly keep mother's one child
+model_unique <- model %>%
+  group_by(m_encrypted_hesid) %>%
+  slice_sample(n = 1)
+
+## chi-square test ---------------------------------------------------------
+#test sex, IMD, matage_bin on baby's tail
+covariates <- c("sex","imd_5","first_child","matage_bin")
+
+csc_mresults <- lapply(covariates,function(var){
+  test_result <- chisq.test(table(model$highest_CSC,model[[var]]))
+  list(
+    variable = var,
+    statistic = test_result$statistic,
+    p_value = test_result$p.value,
+    df = test_result$parameter
+  )
+})
+csc_mresults_dt <- rbindlist(csc_mresults,fill = TRUE)
+print(csc_mresults_dt)
+
+#select other covariates
+covariates <- c("m_ethnos_group","adv_hardelid_herbert","mh_hardelid_herbert","cc_hardelid_herbert","m_FSMeligible","m_sen_provision","KS4_bin")
+
+csc_results <- lapply(covariates,function(var){
+  test_result <- chisq.test(table(model_unique$highest_CSC,model_unique[[var]]))
+  list(
+    variable = var,
+    statistic = test_result$statistic,
+    p_value = test_result$p.value,
+    df = test_result$parameter
+  )
+})
+csc_results_dt <- rbindlist(csc_results,fill = TRUE)
+print(csc_results_dt)
+
+## visualisation -----------------------------------------------------------
+csc_results_dt[, significance := ifelse(p_value < 0.001, "***",
+                                        ifelse(p_value < 0.01, "**",
+                                               ifelse(p_value < 0.05, "*", "")))]
+
+library(ggplot2)
+ggplot(csc_results_dt,aes(x = reorder(variable,-statistic),y = statistic)) +
+  geom_bar(stat = "identity",fill = "skyblue") +
+  geom_text(aes(label = significance), vjust = -0.5, color = "red", size = 5) +
+  labs(title = "Exposure - Covariates", x = "Covariates",y = "Statistics") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# birth weight =============================================================
+## birweit ~ covariates ----------------------------------------------------
+birweit <- model[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,birweit_bin,sex,imd_5,m_ethnos_group,first_child,matage_bin,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
+birweit <- na.omit(birweit)
+fwrite(birweit, paste0(steffi_dir, "birweit.csv"))
+birweit <- fread(paste0(steffi_dir, "birweit.csv"))
+sum(is.na(model$birweit_bin))
+birweit[,.N,by=(highest_CSC)]
+
+sum(is.na(model$sex))
+sum(is.na(model$imd))
+sum(is.na(model$m_ethnos_group))
+sum(is.na(model$KS4_bin))
+
+## chi-square test ---------------------------------------------------------
+variables <- c("highest_CSC","sex","imd_5","m_ethnos_group","first_child","matage_bin","adv_hardelid_herbert","mh_hardelid_herbert","cc_hardelid_herbert","m_FSMeligible","m_sen_provision","KS4_bin")
+
+bw_results <- lapply(variables,function(var){
+  test_result <- chisq.test(table(birweit$birweit_bin,birweit[[var]]))
+  list(
+    variable = var,
+    statistic = test_result$statistic,
+    p_value = test_result$p.value,
+    df = test_result$parameter
+  )
+})
+bw_results_dt <- rbindlist(bw_results,fill = TRUE)
+print(bw_results_dt)
+
+## visualisation -----------------------------------------------------------
+bw_results_dt[, significance := ifelse(p_value < 0.001, "***",
+                             ifelse(p_value < 0.01, "**",
+                             ifelse(p_value < 0.05, "*", "")))]
+ggplot(bw_results_dt,aes(x = reorder(variable,-statistic),y = statistic)) +
+  geom_bar(stat = "identity",fill = "skyblue") +
+  geom_text(aes(label = significance), vjust = -0.5, color = "red", size = 5) +
+  labs(title = "Birth weight - Variables", x = "Variables",y = "Statistics") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+## logistic regression uni -------------------------------------------------
+model_bw_uni <- glm(birweit_bin ~ highest_CSC, 
+                    data = birweit, 
+                    family = poisson(link = "log"))
+print(model_bw_uni)
+sum(is.na(health_out$birweit_bin))
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se <- vcovCL(model_bw_uni, cluster = ~m_encrypted_hesid)
+results_bw_uni <- tidy(model_bw_uni, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_bw_uni$significance <- sapply(results_bw_uni$p.value, function(x) add_significance(as.numeric(x)))
+print(results_bw_uni, n = Inf)
+
+## logistic regression multi -----------------------------------------------
+model_bw <- glm(birweit_bin ~ highest_CSC + sex + imd_5 + m_ethnos_group + first_child + matage_bin + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin, 
+             data = birweit, 
+             family = poisson(link = "log"))
+print(model_bw)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se <- vcovCL(model_bw, cluster = ~m_encrypted_hesid)
+results_bw <- tidy(model_bw, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_bw$significance <- sapply(results_bw$p.value, function(x) add_significance(as.numeric(x)))
+print(results_bw, n = Inf)
+
+## logistic regression multi (sensitivity analysis)-------------------------
+model_bw_sa <- glm(birweit_bin ~ highest_CSC * first_child + sex + imd_5 + m_ethnos_group + matage_bin + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin, 
+                data = birweit, 
+                family = poisson(link = "log"))
+print(model_bw_sa)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se_sa <- vcovCL(model_bw_sa, cluster = ~m_encrypted_hesid)
+results_bw_sa <- tidy(model_bw_sa, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se_sa)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_bw_sa$significance <- sapply(results_bw_sa$p.value, function(x) add_significance(as.numeric(x)))
+print(results_bw_sa, n = Inf)
+
+#P for interaction term
+linearHypothesis(model_bw_sa, matchCoefs(model_bw_sa, pattern = ":"), vcov. = cluster_se_sa)
+
+## logistic regression multi (interaction term)-----------------------------
+model_bw_em <- glm(birweit_bin ~ highest_CSC + sex + imd_5 + m_ethnos_group + first_child + matage_bin + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin + highest_CSC:matage_bin, 
+                   data = birweit, 
+                   family = poisson(link = "log"))
+print(model_bw_em)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se_em <- vcovCL(model_bw_em, cluster = ~m_encrypted_hesid)
+results_bw_em <- tidy(model_bw_em, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se_em)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_bw_em$significance <- sapply(results_bw_em$p.value, function(x) add_significance(as.numeric(x)))
+print(results_bw_em, n = Inf)
+
+#P for interaction term
+linearHypothesis(model_bw_em, matchCoefs(model_bw_em, pattern = ":"), vcov. = cluster_se_em)
+
+## gestat ~ covariates -----------------------------------------------------
+gestat <- model[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,gestat_bin,sex,imd_5,m_ethnos_group,first_child,matage_bin,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
+gestat <- na.omit(gestat)
+fwrite(gestat, paste0(steffi_dir, "gestat.csv"))
+gestat <- fread(paste0(steffi_dir, "gestat.csv"))
+sum(is.na(model$gestat_bin))
+zero_count <- gestat[, sum(gestat_bin == 0)]
+gestat[,.N,by=(highest_CSC)]
+
+## chi-square test ---------------------------------------------------------
+variables <- c("highest_CSC","sex","imd_5","m_ethnos_group","first_child","matage_bin","adv_hardelid_herbert","mh_hardelid_herbert","cc_hardelid_herbert","m_FSMeligible","m_sen_provision","KS4_bin")
+
+gestat_results <- lapply(variables,function(var){
+  test_result <- chisq.test(table(gestat$gestat_bin,gestat[[var]]))
+  list(
+    variable = var,
+    statistic = test_result$statistic,
+    p_value = test_result$p.value,
+    df = test_result$parameter
+  )
+})
+gestat_results_dt <- rbindlist(gestat_results,fill = TRUE)
+print(gestat_results_dt)
+
+## visualisation -----------------------------------------------------------
+gestat_results_dt[, significance := ifelse(p_value < 0.001, "***",
+                                       ifelse(p_value < 0.01, "**",
+                                              ifelse(p_value < 0.05, "*", "")))]
+ggplot(gestat_results_dt,aes(x = reorder(variable,-statistic),y = statistic)) +
+  geom_bar(stat = "identity",fill = "skyblue") +
+  geom_text(aes(label = significance), vjust = -0.5, color = "red", size = 5) +
+  labs(title = "Gestational age - Variables", x = "Variables",y = "Statistics") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+## logistic regression uni -------------------------------------------------
+model_gestat_uni <- glm(gestat_bin ~ highest_CSC, 
+                    data = gestat, 
+                    family = poisson(link = "log"))
+print(model_gestat_uni)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se <- vcovCL(model_gestat_uni, cluster = ~m_encrypted_hesid)
+results_gestat_uni <- tidy(model_gestat_uni, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_gestat_uni$significance <- sapply(results_gestat_uni$p.value, function(x) add_significance(as.numeric(x)))
+print(results_gestat_uni, n = Inf)
+
+## logistic regression multi -----------------------------------------------
+model_gestat <- glm(gestat_bin ~ highest_CSC + sex + imd_5 + m_ethnos_group + first_child + matage_bin + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin, 
+                data = gestat, 
+                family = poisson(link = "log"))
+print(model_gestat)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se <- vcovCL(model_gestat, cluster = ~m_encrypted_hesid)
+results_gestat <- tidy(model_gestat, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_gestat$significance <- sapply(results_gestat$p.value, function(x) add_significance(as.numeric(x)))
+print(results_gestat, n = Inf)
+
+## logistic regression multi (sensitivity analysis)-------------------------
+model_gestat_sa <- glm(gestat_bin ~ highest_CSC * first_child + sex + imd_5 + m_ethnos_group + matage_bin + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin, 
+                   data = gestat, 
+                   family = poisson(link = "log"))
+print(model_gestat_sa)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se_sa <- vcovCL(model_gestat_sa, cluster = ~m_encrypted_hesid)
+results_gestat_sa <- tidy(model_gestat_sa, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se_sa)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_gestat_sa$significance <- sapply(results_gestat_sa$p.value, function(x) add_significance(as.numeric(x)))
+print(results_gestat_sa, n = Inf)
+
+#P for interaction term
+linearHypothesis(model_gestat_sa, matchCoefs(model_gestat_sa, pattern = ":"), vcov. = cluster_se_sa)
+
+## logistic regression multi (interaction term)-----------------------------
+model_gestat_em <- glm(gestat_bin ~ highest_CSC + sex + imd_5 + m_ethnos_group + first_child + matage_bin + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin + highest_CSC:matage_bin, 
+                   data = gestat, 
+                   family = poisson(link = "log"))
+print(model_gestat_em)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se_em <- vcovCL(model_gestat_em, cluster = ~m_encrypted_hesid)
+results_gestat_em <- tidy(model_gestat_em, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se_em)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_gestat_em$significance <- sapply(results_gestat_em$p.value, function(x) add_significance(as.numeric(x)))
+print(results_gestat_em, n = Inf)
+
+#P for interaction term
+linearHypothesis(model_gestat_em, matchCoefs(model_gestat_em, pattern = ":"), vcov. = cluster_se_em)
+
+# mortality by age 1 ------------------------------------------------------
+## death ~ covariates ------------------------------------------------------
+death <- model[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,infant_death,sex,imd_5,m_ethnos_group,first_child,matage_bin,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
+death <- na.omit(death)
+fwrite(death, paste0(steffi_dir, "death.csv"))
+death <- fread(paste0(steffi_dir, "death.csv"))
+sum(is.na(model$infant_death))
+death[,.N,by=(highest_CSC)]
+
+## chi-square test ---------------------------------------------------------
+variables <- c("highest_CSC","sex","imd_5","m_ethnos_group","first_child","matage_bin","adv_hardelid_herbert","mh_hardelid_herbert","cc_hardelid_herbert","m_FSMeligible","m_sen_provision","KS4_bin")
+
+death_results <- lapply(variables,function(var){
+  test_result <- chisq.test(table(death$infant_death,death[[var]]))
+  list(
+    variable = var,
+    statistic = test_result$statistic,
+    p_value = test_result$p.value,
+    df = test_result$parameter
+  )
+})
+death_results_dt <- rbindlist(death_results,fill = TRUE)
+print(death_results_dt)
+
+## visualisation -----------------------------------------------------------
+death_results_dt[, significance := ifelse(p_value < 0.001, "***",
+                                           ifelse(p_value < 0.01, "**",
+                                                  ifelse(p_value < 0.05, "*", "")))]
+ggplot(death_results_dt,aes(x = reorder(variable,-statistic),y = statistic)) +
+  geom_bar(stat = "identity",fill = "skyblue") +
+  geom_text(aes(label = significance), vjust = -0.5, color = "red", size = 5) +
+  labs(title = "Mortality - Variables", x = "Variables",y = "Statistics") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+## logistic regression uni -------------------------------------------------
+model_death_uni <- glm(infant_death ~ highest_CSC, 
+                        data = death, 
+                        family = poisson(link = "log"))
+print(model_death_uni)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se <- vcovCL(model_death_uni, cluster = ~m_encrypted_hesid)
+results_death_uni <- tidy(model_death_uni, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_death_uni$significance <- sapply(results_death_uni$p.value, function(x) add_significance(as.numeric(x)))
+print(results_death_uni, n = Inf)
+
+## logistic regression multi -----------------------------------------------
+model_death <- glm(infant_death ~ highest_CSC + sex + imd_5 + m_ethnos_group + first_child + matage_bin + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin, 
+                    data = death, 
+                    family = poisson(link = "log"))
+print(model_death)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se <- vcovCL(model_death, cluster = ~m_encrypted_hesid)
+results_death <- tidy(model_death, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_death$significance <- sapply(results_death$p.value, function(x) add_significance(as.numeric(x)))
+print(results_death, n = Inf)
+
+## logistic regression multi (sensitivity analysis)-------------------------
+model_death_sa <- glm(infant_death ~ highest_CSC * first_child + sex + imd_5 + m_ethnos_group + matage_bin + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin, 
+                   data = death, 
+                   family = poisson(link = "log"))
+print(model_death_sa)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se_sa <- vcovCL(model_death_sa, cluster = ~m_encrypted_hesid)
+results_death_sa <- tidy(model_death_sa, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se_sa)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_death_sa$significance <- sapply(results_death_sa$p.value, function(x) add_significance(as.numeric(x)))
+print(results_death_sa, n = Inf)
+
+#P for interaction term
+linearHypothesis(model_death_sa, matchCoefs(model_death_sa, pattern = ":"), vcov. = cluster_se_sa)
+
+## logistic regression multi (interaction term)-----------------------------
+model_death_em <- glm(infant_death ~ highest_CSC + sex + imd_5 + m_ethnos_group + first_child + matage_bin + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin + highest_CSC:matage_bin, 
+                       data = death, 
+                       family = poisson(link = "log"))
+print(model_death_em)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se_em <- vcovCL(model_death_em, cluster = ~m_encrypted_hesid)
+results_death_em <- tidy(model_death_em, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se_em)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_death_em$significance <- sapply(results_death_em$p.value, function(x) add_significance(as.numeric(x)))
+print(results_death_em, n = Inf)
+
+#P for interaction term
+linearHypothesis(model_death_em, matchCoefs(model_death_em, pattern = ":"), vcov. = cluster_se_em)
+
+# unplanned hospital admissions < 1 ========================================
+## admi ~ covariates ------------------------------------------------------
+admi_1 <- model[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,unplanned_admission_1,sex,imd_5,m_ethnos_group,first_child,matage_bin,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
+admi_1 <- na.omit(admi_1)
+fwrite(admi_1, paste0(steffi_dir, "admi_1.csv"))
+admi_1 <- fread(paste0(steffi_dir, "admi_1.csv"))
+admi_1[,.N,by=(highest_CSC)]
+
+## chi-square test ---------------------------------------------------------
+variables <- c("highest_CSC","sex","imd_5","m_ethnos_group","first_child","matage_bin","adv_hardelid_herbert","mh_hardelid_herbert","cc_hardelid_herbert","m_FSMeligible","m_sen_provision","KS4_bin")
+
+admi_1_results <- lapply(variables,function(var){
+  test_result <- chisq.test(table(admi_1$unplanned_admission_1,admi_1[[var]]))
+  list(
+    variable = var,
+    statistic = test_result$statistic,
+    p_value = test_result$p.value,
+    df = test_result$parameter
+  )
+})
+admi_1_results_dt <- rbindlist(admi_1_results,fill = TRUE)
+print(admi_1_results_dt)
+
+## visualisation -----------------------------------------------------------
+admi_1_results_dt[, significance := ifelse(p_value < 0.001, "***",
+                                          ifelse(p_value < 0.01, "**",
+                                                 ifelse(p_value < 0.05, "*", "")))]
+ggplot(admi_1_results_dt,aes(x = reorder(variable,-statistic),y = statistic)) +
+  geom_bar(stat = "identity",fill = "skyblue") +
+  geom_text(aes(label = significance), vjust = -0.5, color = "red", size = 5) +
+  labs(title = "Unplanned hospital admission by 1 - Variables", x = "Variables",y = "Statistics") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+## logistic regression uni -------------------------------------------------
+model_admi_1_uni <- glm(unplanned_admission_1 ~ highest_CSC, 
+                       data = admi_1, 
+                       family = poisson(link = "log"))
+print(model_admi_1_uni)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se <- vcovCL(model_admi_1_uni, cluster = ~m_encrypted_hesid)
+results_admi_1_uni <- tidy(model_admi_1_uni, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_admi_1_uni$significance <- sapply(results_admi_1_uni$p.value, function(x) add_significance(as.numeric(x)))
+print(results_admi_1_uni, n = Inf)
+
+## logistic regression multi -----------------------------------------------
+model_admi_1 <- glm(unplanned_admission_1 ~ highest_CSC + sex + imd_5 + m_ethnos_group + first_child + matage_bin + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin, 
+                   data = admi_1, 
+                   family = poisson(link = "log"))
+print(model_admi_1)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se <- vcovCL(model_admi_1, cluster = ~m_encrypted_hesid)
+results_admi_1 <- tidy(model_admi_1, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_admi_1$significance <- sapply(results_admi_1$p.value, function(x) add_significance(as.numeric(x)))
+print(results_admi_1, n = Inf)
+
+## logistic regression multi (sensitivity analysis)-------------------------
+model_admi_1_sa <- glm(unplanned_admission_1 ~ highest_CSC * first_child + sex + imd_5 + m_ethnos_group + matage_bin + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin, 
+                   data = admi_1, 
+                   family = poisson(link = "log"))
+print(model_admi_1_sa)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se_sa <- vcovCL(model_admi_1_sa, cluster = ~m_encrypted_hesid)
+results_admi_1_sa <- tidy(model_admi_1_sa, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se_sa)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_admi_1_sa$significance <- sapply(results_admi_1_sa$p.value, function(x) add_significance(as.numeric(x)))
+print(results_admi_1_sa, n = Inf)
+
+#P for interaction term
+linearHypothesis(model_admi_1_sa, matchCoefs(model_admi_1_sa, pattern = ":"), vcov. = cluster_se_sa)
+
+## logistic regression multi (interaction term)-----------------------------
+model_admi_1_em <- glm(unplanned_admission_1 ~ highest_CSC + sex + imd_5 + m_ethnos_group + first_child + matage_bin + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin + highest_CSC:matage_bin, 
+                      data = admi_1, 
+                      family = poisson(link = "log"))
+print(model_admi_1_em)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se_em <- vcovCL(model_admi_1_em, cluster = ~m_encrypted_hesid)
+results_admi_1_em <- tidy(model_admi_1_em, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se_em)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_admi_1_em$significance <- sapply(results_admi_1_em$p.value, function(x) add_significance(as.numeric(x)))
+print(results_admi_1_em, n = Inf)
+
+#P for interaction term
+linearHypothesis(model_admi_1_em, matchCoefs(model_admi_1_em, pattern = ":"), vcov. = cluster_se_em)
+
+# A&E < 1 ==================================================================
+## AE ~ covariates --------------------------------------------------------
+AE_1 <- model[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,AE_1,sex,imd_5,m_ethnos_group,first_child,matage_bin,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
+AE_1 <- na.omit(AE_1)
+fwrite(AE_1, paste0(steffi_dir, "AE_1.csv"))
+AE_1 <- fread(paste0(steffi_dir, "AE_1.csv"))
+AE_1[,.N,by=(highest_CSC)]
+
+## chi-square test ---------------------------------------------------------
+variables <- c("highest_CSC","sex","imd_5","m_ethnos_group","first_child","matage_bin","adv_hardelid_herbert","mh_hardelid_herbert","cc_hardelid_herbert","m_FSMeligible","m_sen_provision","KS4_bin")
+
+AE_1_results <- lapply(variables,function(var){
+  test_result <- chisq.test(table(AE_1$AE_1,AE_1[[var]]))
+  list(
+    variable = var,
+    statistic = test_result$statistic,
+    p_value = test_result$p.value,
+    df = test_result$parameter
+  )
+})
+AE_1_results_dt <- rbindlist(AE_1_results,fill = TRUE)
+print(AE_1_results_dt)
+
+## visualisation -----------------------------------------------------------
+AE_1_results_dt[, significance := ifelse(p_value < 0.001, "***",
+                                         ifelse(p_value < 0.01, "**",
+                                                ifelse(p_value < 0.05, "*", "")))]
+ggplot(AE_1_results_dt,aes(x = reorder(variable,-statistic),y = statistic)) +
+  geom_bar(stat = "identity",fill = "skyblue") +
+  geom_text(aes(label = significance), vjust = -0.5, color = "red", size = 5) +
+  labs(title = "A&E by 1 - Variables", x = "Variables",y = "Statistics") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+## logistic regression uni -------------------------------------------------
+model_AE_1_uni <- glm(AE_1 ~ highest_CSC, 
+                      data = AE_1, 
+                      family = poisson(link = "log"))
+print(model_AE_1_uni)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se <- vcovCL(model_AE_1_uni, cluster = ~m_encrypted_hesid)
+results_AE_1_uni <- tidy(model_AE_1_uni, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_AE_1_uni$significance <- sapply(results_AE_1_uni$p.value, function(x) add_significance(as.numeric(x)))
+print(results_AE_1_uni, n = Inf)
+
+## logistic regression multi -----------------------------------------------
+model_AE_1 <- glm(AE_1 ~ highest_CSC + sex + imd_5 + m_ethnos_group + first_child + matage_bin + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin, 
+                  data = AE_1, 
+                  family = poisson(link = "log"))
+print(model_AE_1)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se <- vcovCL(model_AE_1, cluster = ~m_encrypted_hesid)
+results_AE_1 <- tidy(model_AE_1, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_AE_1$significance <- sapply(results_AE_1$p.value, function(x) add_significance(as.numeric(x)))
+print(results_AE_1, n = Inf)
+
+## logistic regression multi (sensitivity analysis)-------------------------
+model_AE_1_sa <- glm(AE_1 ~ highest_CSC * first_child + sex + imd_5 + m_ethnos_group + first_child + matage_bin + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin, 
+                       data = AE_1, 
+                       family = poisson(link = "log"))
+print(model_AE_1_sa)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se_sa <- vcovCL(model_AE_1_sa, cluster = ~m_encrypted_hesid)
+results_AE_1_sa <- tidy(model_AE_1_sa, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se_sa)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_AE_1_sa$significance <- sapply(results_AE_1_sa$p.value, function(x) add_significance(as.numeric(x)))
+print(results_AE_1_sa, n = Inf)
+
+#P for interaction term
+linearHypothesis(model_AE_1_sa, matchCoefs(model_AE_1_sa, pattern = ":"), vcov. = cluster_se_sa)
+
+## logistic regression multi (interaction term)-----------------------------
+model_AE_1_em <- glm(AE_1 ~ highest_CSC + sex + imd_5 + m_ethnos_group + first_child + matage_bin + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin + highest_CSC:matage_bin, 
+                     data = AE_1, 
+                     family = poisson(link = "log"))
+print(model_AE_1_em)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se_em <- vcovCL(model_AE_1_em, cluster = ~m_encrypted_hesid)
+results_AE_1_em <- tidy(model_AE_1_em, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se_em)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_AE_1_em$significance <- sapply(results_AE_1_em$p.value, function(x) add_significance(as.numeric(x)))
+print(results_AE_1_em, n = Inf)
+
+#P for interaction term
+linearHypothesis(model_AE_1_em, matchCoefs(model_AE_1_em, pattern = ":"), vcov. = cluster_se_em)
+
+# unplanned hospital admissions 1-5 ========================================
+## admi ~ covariates ------------------------------------------------------
+admi_5 <- model[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,unplanned_admission_1_5,sex,imd_5,m_ethnos_group,first_child,matage_bin,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
+admi_5 <- na.omit(admi_5)
+fwrite(admi_5, paste0(steffi_dir, "admi_5.csv"))
+admi_5 <- fread(paste0(steffi_dir, "admi_5.csv"))
+admi_5[,.N,by=(highest_CSC)]
+
+## chi-square test ---------------------------------------------------------
+variables <- c("highest_CSC","sex","imd_5","m_ethnos_group","first_child","matage_bin","adv_hardelid_herbert","mh_hardelid_herbert","cc_hardelid_herbert","m_FSMeligible","m_sen_provision","KS4_bin")
+
+admi_5_results <- lapply(variables,function(var){
+  test_result <- chisq.test(table(admi_5$unplanned_admission_1_5,admi_5[[var]]))
+  list(
+    variable = var,
+    statistic = test_result$statistic,
+    p_value = test_result$p.value,
+    df = test_result$parameter
+  )
+})
+admi_5_results_dt <- rbindlist(admi_5_results,fill = TRUE)
+print(admi_5_results_dt)
+
+## visualisation -----------------------------------------------------------
+admi_5_results_dt[, significance := ifelse(p_value < 0.001, "***",
+                                           ifelse(p_value < 0.01, "**",
+                                                  ifelse(p_value < 0.05, "*", "")))]
+ggplot(admi_5_results_dt,aes(x = reorder(variable,-statistic),y = statistic)) +
+  geom_bar(stat = "identity",fill = "skyblue") +
+  geom_text(aes(label = significance), vjust = -0.5, color = "red", size = 5) +
+  labs(title = "Unplanned hospital admission 1-5 - Variables", x = "Variables",y = "Statistics") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+## logistic regression uni -------------------------------------------------
+model_admi_5_uni <- glm(unplanned_admission_1_5 ~ highest_CSC, 
+                        data = admi_5, 
+                        family = poisson(link = "log"))
+print(model_admi_5_uni)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se <- vcovCL(model_admi_5_uni, cluster = ~m_encrypted_hesid)
+results_admi_5_uni <- tidy(model_admi_5_uni, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_admi_5_uni$significance <- sapply(results_admi_5_uni$p.value, function(x) add_significance(as.numeric(x)))
+print(results_admi_5_uni, n = Inf)
+
+## logistic regression multi -----------------------------------------------
+model_admi_5 <- glm(unplanned_admission_1_5 ~ highest_CSC + sex + imd_5 + m_ethnos_group + first_child + matage_bin + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin, 
+                   data = admi_5, 
+                   family = poisson(link = "log"))
+print(model_admi_5)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se <- vcovCL(model_admi_5, cluster = ~m_encrypted_hesid)
+results_admi_5 <- tidy(model_admi_5, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_admi_5$significance <- sapply(results_admi_5$p.value, function(x) add_significance(as.numeric(x)))
+print(results_admi_5, n = Inf)
+
+## logistic regression multi (sensitivity analysis)-------------------------
+model_admi_5_sa <- glm(unplanned_admission_1_5 ~ highest_CSC * first_child + sex + imd_5 + m_ethnos_group + matage_bin + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin, 
+                   data = admi_5, 
+                   family = poisson(link = "log"))
+print(model_admi_5_sa)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se_sa <- vcovCL(model_admi_5_sa, cluster = ~m_encrypted_hesid)
+results_admi_5_sa <- tidy(model_admi_5_sa, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se_sa)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_admi_5_sa$significance <- sapply(results_admi_5_sa$p.value, function(x) add_significance(as.numeric(x)))
+#results_bw$p.value <- format(results_bw$p.value, scientific = FALSE)
+print(results_admi_5_sa, n = Inf)
+
+#P for interaction term
+linearHypothesis(model_admi_5_sa, matchCoefs(model_admi_5_sa, pattern = ":"), vcov. = cluster_se_sa)
+
+## logistic regression multi (interaction term)-----------------------------
+model_admi_5_em <- glm(unplanned_admission_1_5 ~ highest_CSC + sex + imd_5 + m_ethnos_group + first_child + matage_bin + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin + highest_CSC:matage_bin, 
+                       data = admi_5, 
+                       family = poisson(link = "log"))
+print(model_admi_5_em)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se_em <- vcovCL(model_admi_5_em, cluster = ~m_encrypted_hesid)
+results_admi_5_em <- tidy(model_admi_5_em, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se_em)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_admi_5_em$significance <- sapply(results_admi_5_em$p.value, function(x) add_significance(as.numeric(x)))
+print(results_admi_5_em, n = Inf)
+
+#P for interaction term
+linearHypothesis(model_admi_5_em, matchCoefs(model_admi_5_em, pattern = ":"), vcov. = cluster_se_em)
+
+# A&E 1-5 ==================================================================
+## AE ~ covariates -------------------------------------------------------
+AE_5 <- model[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,AE_5,sex,imd_5,m_ethnos_group,first_child,matage_bin,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
+AE_5 <- na.omit(AE_5)
+fwrite(AE_5, paste0(steffi_dir, "AE_5.csv"))
+AE_5 <- fread(paste0(steffi_dir, "AE_5.csv"))
+AE_5[,.N,by=(highest_CSC)]
+
+## chi-square test ---------------------------------------------------------
+variables <- c("highest_CSC","sex","imd_5","m_ethnos_group","first_child","matage_bin","adv_hardelid_herbert","mh_hardelid_herbert","cc_hardelid_herbert","m_FSMeligible","m_sen_provision","KS4_bin")
+
+AE_5_results <- lapply(variables,function(var){
+  test_result <- chisq.test(table(AE_5$AE_5,AE_5[[var]]))
+  list(
+    variable = var,
+    statistic = test_result$statistic,
+    p_value = test_result$p.value,
+    df = test_result$parameter
+  )
+})
+AE_5_results_dt <- rbindlist(AE_5_results,fill = TRUE)
+print(AE_5_results_dt)
+
+## visualisation -----------------------------------------------------------
+AE_5_results_dt[, significance := ifelse(p_value < 0.001, "***",
+                                           ifelse(p_value < 0.01, "**",
+                                                  ifelse(p_value < 0.05, "*", "")))]
+ggplot(AE_5_results_dt,aes(x = reorder(variable,-statistic),y = statistic)) +
+  geom_bar(stat = "identity",fill = "skyblue") +
+  geom_text(aes(label = significance), vjust = -0.5, color = "red", size = 5) +
+  labs(title = "A&E 1-5 - Variables", x = "Variables",y = "Statistics") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+## logistic regression uni -------------------------------------------------
+model_AE_5_uni <- glm(AE_5 ~ highest_CSC, 
+                        data = AE_5, 
+                        family = poisson(link = "log"))
+print(model_AE_5_uni)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se <- vcovCL(model_AE_5_uni, cluster = ~m_encrypted_hesid)
+results_AE_5_uni <- tidy(model_AE_5_uni, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_AE_5_uni$significance <- sapply(results_AE_5_uni$p.value, function(x) add_significance(as.numeric(x)))
+print(results_AE_5_uni, n = Inf)
+
+## logistic regression multi -----------------------------------------------
+model_AE_5 <- glm(AE_5 ~ highest_CSC + sex + imd_5 + m_ethnos_group + first_child + matage_bin + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin, 
+                    data = AE_5, 
+                    family = poisson(link = "log"))
+print(model_AE_5)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se <- vcovCL(model_AE_5, cluster = ~m_encrypted_hesid)
+results_AE_5 <- tidy(model_AE_5, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_AE_5$significance <- sapply(results_AE_5$p.value, function(x) add_significance(as.numeric(x)))
+print(results_AE_5, n = Inf)
+
+## logistic regression multi (sensitivity analysis)-------------------------
+model_AE_5_sa <- glm(AE_5 ~ highest_CSC * first_child + sex + imd_5 + m_ethnos_group + first_child + matage_bin + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin, 
+                     data = AE_5, 
+                     family = poisson(link = "log"))
+print(model_AE_5_sa)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se_sa <- vcovCL(model_AE_5_sa, cluster = ~m_encrypted_hesid)
+results_AE_5_sa <- tidy(model_AE_5_sa, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se_sa)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_AE_5_sa$significance <- sapply(results_AE_5_sa$p.value, function(x) add_significance(as.numeric(x)))
+print(results_AE_5_sa, n = Inf)
+
+#P for interaction term
+linearHypothesis(model_AE_5_sa, matchCoefs(model_AE_5_sa, pattern = ":"), vcov. = cluster_se_sa)
+
+## logistic regression multi (interaction term)-----------------------------
+model_AE_5_em <- glm(AE_5 ~ highest_CSC + sex + imd_5 + m_ethnos_group + first_child + matage_bin + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin + highest_CSC:matage_bin, 
+                     data = AE_5, 
+                     family = poisson(link = "log"))
+print(model_AE_5_em)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se_em <- vcovCL(model_AE_5_em, cluster = ~m_encrypted_hesid)
+results_AE_5_em <- tidy(model_AE_5_em, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se_em)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_AE_5_em$significance <- sapply(results_AE_5_em$p.value, function(x) add_significance(as.numeric(x)))
+print(results_AE_5_em, n = Inf)
+
+#P for interaction term
+linearHypothesis(model_AE_5_em, matchCoefs(model_AE_5_em, pattern = ":"), vcov. = cluster_se_em)
+
+#**************************************************************************
+# educational outcome
+#**************************************************************************
+
+# working directory ------------------------------------------------------
+master_dir <- "P:/.../.../"
+steffi_dir <- "P:/.../.../.../model/"
+
+# CSC ~ covariates =========================================================
+EYFSP <- fread(paste0("P:/.../.../.../EYFSP.csv"))
+
+## change reference group --------------------------------------------------
+EYFSP$highest_CSC <- factor(EYFSP$highest_CSC,levels = c("non-csc","cin","cpp","cla"))
+levels(EYFSP$highest_CSC)
+EYFSP$m_ethnos_group <- as.factor(EYFSP$m_ethnos_group)
+EYFSP$m_ethnos_group <- relevel(EYFSP$m_ethnos_group, ref = "White")
+EYFSP$imd_5 <- factor(EYFSP$imd_5,levels = c("5","4","3","2","1"))
+
+## select variables --------------------------------------------------------
+model_edu <- EYFSP[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,eyfsp_gld,sex,imd_5,m_ethnos_group,matage_bin,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
+fwrite(model_edu, paste0(steffi_dir, "model_edu.csv"))
+model_edu <- fread(paste0(steffi_dir, "model_edu.csv"))
+
+#randomly keep mother's one child
+model_edu_unique <- model_edu %>%
+  group_by(m_encrypted_hesid) %>%
+  slice_sample(n = 1)
+
+## chi-square test ---------------------------------------------------------
+#test sex, IMD only
+covariates <- c("sex","imd_5","matage_bin","first_child")
+
+csc_results <- lapply(covariates,function(var){
+  test_result <- chisq.test(table(model_edu$highest_CSC,model_edu[[var]]))
+  list(
+    variable = var,
+    statistic = test_result$statistic,
+    p_value = test_result$p.value,
+    df = test_result$parameter
+  )
+})
+csc_results_dt <- rbindlist(csc_results,fill = TRUE)
+print(csc_results_dt)
+
+#dup_rows <- model[model[, .N, by = m_encrypted_hesid][N > 1], on = "m_encrypted_hesid"]
+
+#select other covariates
+covariates <- c("m_ethnos_group","adv_hardelid_herbert","mh_hardelid_herbert","cc_hardelid_herbert","m_FSMeligible","m_sen_provision","KS4_bin")
+
+csc_mresults <- lapply(covariates,function(var){
+  test_result <- chisq.test(table(model_edu_unique$highest_CSC,model_edu_unique[[var]]))
+  list(
+    variable = var,
+    statistic = test_result$statistic,
+    p_value = test_result$p.value,
+    df = test_result$parameter
+  )
+})
+csc_mresults_dt <- rbindlist(csc_mresults,fill = TRUE)
+print(csc_mresults_dt)
+
+## visualisation -----------------------------------------------------------
+csc_results_dt[, significance := ifelse(p_value < 0.001, "***",
+                                        ifelse(p_value < 0.01, "**",
+                                               ifelse(p_value < 0.05, "*", "")))]
+
+library(ggplot2)
+ggplot(csc_results_dt,aes(x = reorder(variable,-statistic),y = statistic)) +
+  geom_bar(stat = "identity",fill = "skyblue") +
+  geom_text(aes(label = significance), vjust = -0.5, color = "red", size = 5) +
+  labs(title = "Exposure - Covariates", x = "Covariates",y = "Statistics") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# EYFSP gld ===============================================================
+## EYFSP ~ covariates -----------------------------------------------------
+EYFSP_all <- model[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,eyfsp_gld,sex,imd_5,m_ethnos_group,first_child,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
+EYFSP_all <- na.omit(EYFSP_all)
+
+EYFSP_all <- EYFSP_all[!eyfsp_gld %in% c("enrolled_not_sit","not_enrolled")]
+EYFSP_all$eyfsp_gld <- as.numeric(EYFSP_all$eyfsp_gld)
+
+EYFSP_all[, eyfsp_gld := ifelse(eyfsp_gld == 0,1,0)]
+
+fwrite(EYFSP_all, paste0(steffi_dir, "EYFSP_all.csv"))
+EYFSP_all <- fread(paste0(steffi_dir, "EYFSP_all.csv"))
+EYFSP_all[,.N,by=(highest_CSC)]
+EYFSP_all[,.N,by=(first_child)]
+
+## chi-square test ---------------------------------------------------------
+variables <- c("highest_CSC","sex","imd_5","m_ethnos_group","first_child","adv_hardelid_herbert","mh_hardelid_herbert","cc_hardelid_herbert","m_FSMeligible","m_sen_provision","KS4_bin")
+
+EYFSP_all_results <- lapply(variables,function(var){
+  test_result <- chisq.test(table(EYFSP_all$eyfsp_gld,EYFSP_all[[var]]))
+  list(
+    variable = var,
+    statistic = test_result$statistic,
+    p_value = test_result$p.value,
+    df = test_result$parameter
+  )
+})
+EYFSP_all_results_dt <- rbindlist(EYFSP_all_results,fill = TRUE)
+print(EYFSP_all_results_dt)
+
+## visualisation -----------------------------------------------------------
+EYFSP_all_results_dt[, significance := ifelse(p_value < 0.001, "***",
+                                         ifelse(p_value < 0.01, "**",
+                                                ifelse(p_value < 0.05, "*", "")))]
+ggplot(EYFSP_all_results_dt,aes(x = reorder(variable,-statistic),y = statistic)) +
+  geom_bar(stat = "identity",fill = "skyblue") +
+  geom_text(aes(label = significance), vjust = -0.5, color = "red", size = 5) +
+  labs(title = "EYFSP_gld - Variables", x = "Variables",y = "Statistics") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+## logistic regression uni -------------------------------------------------
+model_EYFSP_all_uni <- glm(eyfsp_gld ~ highest_CSC, 
+                       data = EYFSP_all, 
+                       family = poisson(link = "log"))
+print(model_EYFSP_all_uni)
+sum(is.na(edu_out$eyfsp_gld))
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se <- vcovCL(model_EYFSP_all_uni, cluster = ~m_encrypted_hesid)
+results_EYFSP_all_uni <- tidy(model_EYFSP_all_uni, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_EYFSP_all_uni$significance <- sapply(results_EYFSP_all_uni$p.value, function(x) add_significance(as.numeric(x)))
+print(results_EYFSP_all_uni, n = Inf)
+
+## logistic regression multi -----------------------------------------------
+model_EYFSP_all <- glm(eyfsp_gld ~ highest_CSC + sex + imd_5 + m_ethnos_group + first_child + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin, 
+                  data = EYFSP_all, 
+                  family = poisson(link = "log"))
+print(model_EYFSP_all)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se <- vcovCL(model_EYFSP_all, cluster = ~m_encrypted_hesid)
+results_EYFSP_all <- tidy(model_EYFSP_all, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_EYFSP_all$significance <- sapply(results_EYFSP_all$p.value, function(x) add_significance(as.numeric(x)))
+print(results_EYFSP_all, n = Inf)
+
+## logistic regression multi (sensitivity analysis)-------------------------
+model_EYFSP_all_sa <- glm(eyfsp_gld ~ highest_CSC * first_child + sex + imd_5 + m_ethnos_group + adv_hardelid_herbert + mh_hardelid_herbert + cc_hardelid_herbert + m_FSMeligible + m_sen_provision + KS4_bin, 
+                     data = EYFSP_all, 
+                     family = poisson(link = "log"))
+print(model_EYFSP_all_sa)
+
+#calculate OR and 95% CI (with clustered standard error)
+cluster_se_sa <- vcovCL(model_EYFSP_all_sa, cluster = ~m_encrypted_hesid)
+results_EYFSP_all_sa <- tidy(model_EYFSP_all_sa, conf.int = TRUE, exponentiate = TRUE, vcov = cluster_se_sa)
+
+add_significance <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  if (p < 0.05) return("*")
+  return("")
+}
+results_EYFSP_all_sa$significance <- sapply(results_EYFSP_all_sa$p.value, function(x) add_significance(as.numeric(x)))
+print(results_EYFSP_all_sa, n = Inf)
+
+#P for interaction term
+linearHypothesis(model_EYFSP_all_sa, matchCoefs(model_EYFSP_all_sa, pattern = ":"), vcov. = cluster_se_sa)
