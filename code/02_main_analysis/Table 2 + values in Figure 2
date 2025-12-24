@@ -1017,8 +1017,6 @@ csc_results <- lapply(covariates,function(var){
 csc_results_dt <- rbindlist(csc_results,fill = TRUE)
 print(csc_results_dt)
 
-#dup_rows <- model[model[, .N, by = m_encrypted_hesid][N > 1], on = "m_encrypted_hesid"]
-
 #select other covariates
 covariates <- c("m_ethnos_group","adv_hardelid_herbert","mh_hardelid_herbert","cc_hardelid_herbert","m_FSMeligible","m_sen_provision","KS4_bin")
 
