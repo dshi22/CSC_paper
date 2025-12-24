@@ -1,5 +1,5 @@
 # Maternal social care experience during adolescence and their children’s early health and educational outcomes
-This repository contains the R code used in the research paper "[Maternal social care experience during adolescence and their children’s early health and educational outcomes]" submitted to Nature Communications.
+This repository contains the R code used in the research paper "Maternal social care experience during adolescence and their children’s early health and educational outcomes" submitted to Nature Communications.
 
 The analyses are based on the [ECHILD](https://www.echild.ac.uk/) (Education and Child Health Insights from Linked Data) dataset. The repository includes:
 
