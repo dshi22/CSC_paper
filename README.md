@@ -3,7 +3,11 @@ This repository contains the R code used in the research paper "Maternal social 
 
 The analyses are based on the [ECHILD](https://www.echild.ac.uk/) (Education and Child Health Insights from Linked Data) dataset. The repository includes:
 
+Code:
 - **Descriptive statistics scripts** `01_descriptive_stats` for generating tables and figures.
 - **Data analysis scripts** `02_main_analysis` used for the main results in the paper.
+
+Appendix Table 6 | Maternal health ICD-10 code lists:
+- **Appendix Table 6**, provided as part of the supplementary materials, comprises three CSV files (`Adversity-related injuries`, `Mental health problems`, `Chronic health conditions`) containing maternal health ICD-10 code lists.
 
 **Note:** The raw data is not included due to privacy restrictions. Access to ECHILD data requires approval. More information on the application process can be found [here](https://www.echild.ac.uk/data-access).
