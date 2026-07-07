@@ -1,9 +1,14 @@
 Descriptive statistics
 
+# working directory ------------------------------------------------------
+master_dir <- "P:/.../Master data TEST/"
+data_dir <- "P:/.../.../data/"
+
 # load packages -----------------------------------------------------------
 library(readr)
 library(dplyr)
 library(tidyr)
+library(data.table)
 library(binom)
 library(ggplot2)
 library(scales)
@@ -14,14 +19,74 @@ Below is the R code used to generate Figure 1.
 
 # CSC * matage ~ out =======================================================
 ## load the file -----------------------------------------------------------
-AR_CSC <- fread(paste0("D:/.../.../.../.../AR_CSC.csv"))
+health_out <- fread(paste0(data_dir,"health_out.csv"))
+health_out_age1 <- fread(paste0(data_dir,"health_out_age1.csv"))
+health_out_age1_5 <- fread(paste0(data_dir,"health_out_age1_5.csv"))
 
-## draw the table-----------------------------------------------------------
-library(ggplot2)
-library(dplyr)
-library(patchwork)
+sum(is.na(health_out$highest_CSC))
+sum(is.na(health_out$matage))
 
+## order CSC & matage_bin --------------------------------------------------
+health_out$highest_CSC <- factor(health_out$highest_CSC, levels = c("non-csc","cin","cpp","cla"))
+health_out$matage_bin <- factor(health_out$matage_bin, levels = c(1,0), labels = c("17-18","19-24"))
+
+health_out_age1$highest_CSC <- factor(health_out_age1$highest_CSC, levels = c("non-csc","cin","cpp","cla"))
+health_out_age1$matage_bin <- factor(health_out_age1$matage_bin, levels = c(1,0), labels = c("17-18","19-23"))
+
+health_out_age1_5$highest_CSC <- factor(health_out_age1_5$highest_CSC, levels = c("non-csc","cin","cpp","cla"))
+health_out_age1_5$matage_bin <- factor(health_out_age1_5$matage_bin, levels = c(1,0), labels = c("17-18","19"))
+
+## define outcomes ---------------------------------------------------------
+health_out_list <- c("birweit_bin","gestat_bin")
+health_out_age1_list <- c("infant_death","unplanned_admission_1","AE_1")
+health_out_age1_5_list <- c("unplanned_admission_1_5","AE_5")
+
+## binary out: AR + Wilson CI ----------------------------------------------
+compute_risk_df <- function(df, outcome_vec, dataset_name){
+  results <- list()
+  
+  for(outvar in outcome_vec){
+    df_sub <- df %>% filter(!is.na(.data[[outvar]]))
+    
+    df_risk <- df_sub %>%
+      group_by(highest_CSC, matage_bin) %>%
+      summarise(
+        n_total = n(),
+        events = sum(.data[[outvar]] == 1, na.rm = TRUE),
+        .group = "drop"
+      ) %>%
+      rowwise() %>%
+      mutate(
+        n_total = floor(n_total / 10 + 0.5) * 10,
+        events = floor(events / 10 + 0.5) * 10,
+        tmp = binom.confint(events, n_total, method="wilson")[1, c("lower","upper","mean")],
+        outcome = outvar,
+        dataset = dataset_name
+        ) %>%
+      unnest_wider(tmp) %>%
+      rename(prop = mean) %>%
+      mutate(
+        lower = as.numeric(lower),
+        upper = as.numeric(upper),
+        prop = as.numeric(prop)
+      )
+    results[[outvar]] <- df_risk
+    }
+  bind_rows(results)
+}
+
+risk_health <- compute_risk_df(health_out, health_out_list, "health_out")
+risk_age1 <- compute_risk_df(health_out_age1, health_out_age1_list, "health_out_age1")
+risk_age1_5 <- compute_risk_df(health_out_age1_5, health_out_age1_5_list, "health_out_age5")
+
+AR_CSC <- bind_rows(risk_health,risk_age1,risk_age1_5)
+
+## Export csv --------------------------------------------------------------
+fwrite(AR_CSC, paste0(data_dir, "AR_CSC.csv"))
+
+## Draw the Figure ---------------------------------------------------------
 # Fix the order of the x-axis and relabel
+AR_CSC$highest_CSC <- tolower(as.character(AR_CSC$highest_CSC))
 AR_CSC$highest_CSC <- factor(AR_CSC$highest_CSC,
                              levels = c("non-csc","cin","cpp","cla"),
                              labels = c("non-CSC","CiN","CPP","CLA"))
