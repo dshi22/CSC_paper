@@ -30,7 +30,7 @@ AR_CSC$highest_CSC <- factor(AR_CSC$highest_CSC,
 age_colors <- c("17-18"="#1f78b4", "19"="#33a02c", "19-23"="#33a02c", "19-24"="#33a02c")
 
 # Function to draw a plot
-plot_AR <- function(df_sub, y_max = NULL, title){
+plot_AR_clean <- function(df_sub, y_max = NULL, title){
   if(is.null(y_max)){
     y_max <- ceiling(max(df_sub$upper*100, df_sub$prop*100, na.rm = TRUE)*10)/10
   }
@@ -38,15 +38,17 @@ plot_AR <- function(df_sub, y_max = NULL, title){
   ggplot(df_sub, aes(x = highest_CSC, y = prop*100, color = matage_bin)) +
     geom_point(position = position_dodge(width = 0.5), size = 3) +
     geom_errorbar(aes(ymin = lower*100, ymax = upper*100),
-                  width = 0.2, position = position_dodge(width = 0.5), size = 0.7) +
-    scale_y_continuous(limits = c(0, y_max),
-                       breaks = scales::pretty_breaks(n=5)) +
+                  width = 0.2, position = position_dodge(width = 0.5), linewidth = 0.8) +
+    scale_y_continuous(limits = c(0, y_max), breaks = scales::pretty_breaks(n=5)) +
     scale_color_manual(values = age_colors) +
-    labs(x="Maternal CSC experience", y="AR (%)", color="Maternal age", title=title) +
-    theme_classic(base_size = 12) +
-    theme(plot.title = element_text(face="bold", hjust=0.5),
-          legend.position = "top",
-          axis.text.x = element_text(angle=0,hjust=0.5))
+    labs(x = NULL, y = NULL, title = title) + 
+    theme_classic(base_size = 15) + 
+    theme(
+      plot.title = element_text(face="bold", hjust=0.5, size=18), 
+      legend.position = "none", 
+      axis.text = element_text(color = "black", size=16),   
+      axis.text.x = element_text(angle=0, hjust=0.5)
+    )
 }
 
 # Generate each plot
@@ -58,14 +60,36 @@ p1e <- plot_AR(filter(AR_CSC, outcome=="unplanned_admission_1_5"), 100, "1e. ≥
 p1f <- plot_AR(filter(AR_CSC, outcome=="AE_1"), 100, "1f. ≥1 A&E attendance (0-1y)")
 p1g <- plot_AR(filter(AR_CSC, outcome=="AE_5"), 100, "1g. ≥1 A&E attendance (1-5y)")
 
-# 3-2-2 layout with centred alignment
-combined <- (p1a | p1b | p1c) /
-  (plot_spacer() | p1d | p1e | plot_spacer()) /
-  (plot_spacer() | p1f | p1g | plot_spacer()) +
-  plot_annotation(title = "") &
-  theme(legend.position = "bottom")
+# 3-2-2 layout with legend
+text_sz <- 5.5
 
-combined
+pleg <- ggplot() +
+  annotate("text", x = 5, y = 85, label = "X-axis:", hjust = 0, size = text_sz, fontface = "bold") +
+  annotate("text", x = 35, y = 85, label = "Maternal CSC experience", hjust = 0, size = text_sz) +
+  annotate("text", x = 5, y = 70, label = "Y-axis:", hjust = 0, size = text_sz, fontface = "bold") +
+  annotate("text", x = 35, y = 70, label = "Absolute risk (%)", hjust = 0, size = text_sz) +
+  annotate("text", x = 5, y = 50, label = "Maternal age:", hjust = 0, size = text_sz, fontface = "bold") +
+  annotate("segment", x = 60, xend = 75, y = 50, yend = 50, color = "#1f78b4", linewidth = 1) +
+  annotate("point", x = 67.5, y = 50, color = "#1f78b4", size = 4.5) + 
+  annotate("text", x = 82, y = 50, label = "17-18", hjust = 0, size = text_sz) +
+  annotate("segment", x = 60, xend = 75, y = 30, yend = 30, color = "#33a02c", linewidth = 1) +
+  annotate("point", x = 67.5, y = 30, color = "#33a02c", size = 4.5) +
+  annotate("text", x = 82, y = 30, label = "19-24, 19-23,\nor 19", hjust = 0, size = text_sz, lineheight = 1.1) +
+  scale_x_continuous(limits = c(0, 120)) +
+  scale_y_continuous(limits = c(0, 100)) +
+  theme_void() +
+  theme(
+    panel.border = element_rect(colour = "black", fill = NA, linewidth = 1),
+    plot.margin = margin(10, 10, 10, 10)
+  )
+
+# output
+combined_final <- p1a + p1b + p1c + 
+  p1d + p1e + plot_spacer() + 
+  p1f + p1g + pleg + 
+  plot_layout(ncol = 3, nrow = 3, heights = c(1, 1, 1))
+
+ggsave("final_manuscript_plot_1.png", combined_final, width = 14, height = 12, dpi = 600)
 
 **Supplementary Figure 3**
 Below is the R code used to generate Supplementary Figure 3.  
