@@ -1,6 +1,5 @@
 # working directory ------------------------------------------------------
 master_dir <- "P:/.../Master data TEST/"
-steffi_dir <- "P:/.../.../.../step by step/"
 KS4_dir <- "P:/.../.../KS4/"
 data_dir <- "P:/.../.../data/"
 
@@ -354,7 +353,7 @@ hardelid[,c("code_nodot","category","description") := NULL]
 hardelid[, code := gsub("\\.", "", code)]
 
 ## Herbert cleaning --------------------------------------------------------
-herbert <- fread("P:/Working/Steffi/adversity related injury codes_Herbert.csv",
+herbert <- fread("P:/.../.../adversity related injury codes_Herbert.csv",
                  header = T,
                  stringsAsFactors = F)
 
