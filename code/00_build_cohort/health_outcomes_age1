@@ -1,6 +1,5 @@
 # working directory ------------------------------------------------------
 master_dir <- "P:/.../Master data TEST/"
-steffi_dir <- "P:/.../.../.../step by step/"
 data_dir <- "P:/.../.../data/"
 
 # load packages -----------------------------------------------------------
@@ -47,8 +46,8 @@ Step2[is.na(unique_admidate), unique_admidate := 0]
 Step2[ ,unplanned_admission_1 := fifelse(unique_admidate >= 1 | infant_death == 1, 1, 0)]
 
 ## Export csv --------------------------------------------------------------
-fwrite(Step2,paste0(steffi_dir,"Step2.csv"))
-Step2 <- fread(paste0(steffi_dir,"Step2.csv"))
+fwrite(Step2,paste0(data_dir,"Step2.csv"))
+Step2 <- fread(paste0(data_dir,"Step2.csv"))
 
 # Step 3: A&E admission ====================================================
 ## load the file -----------------------------------------------------------
