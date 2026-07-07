@@ -11,7 +11,7 @@ The analyses were conducted using the [ECHILD](https://www.echild.ac.uk/) (Educa
 
 ### Cohort creation
 
-The `build_cohort` directory contains scripts used to construct the analytical cohorts for:
+The `00_build_cohort` directory contains scripts used to construct the analytical cohorts for:
 
 - `health_outcomes_main` – birth outcomes;
 - `health_outcomes_age1` – health outcomes within the first year of life;
