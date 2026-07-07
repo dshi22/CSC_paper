@@ -1,3 +1,6 @@
+**Figure 1**
+Below is the R code used to generate Figure 1. 
+
 # working directory ------------------------------------------------------
 master_dir <- "P:/.../Master data TEST/"
 data_dir <- "P:/.../.../data/"
@@ -11,9 +14,6 @@ library(binom)
 library(ggplot2)
 library(scales)
 library(patchwork)
-
-**Figure 1**
-Below is the R code used to generate Figure 1.  
 
 # CSC * matage ~ out =======================================================
 ## load the file -----------------------------------------------------------
