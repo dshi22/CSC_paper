@@ -1,1 +1,711 @@
+# working directory ------------------------------------------------------
+master_dir <- "P:/.../Master data TEST/"
+steffi_dir <- "P:/.../.../.../step by step/"
+KS4_dir <- "P:/.../.../KS4/"
+data_dir <- "P:/.../.../data/"
 
+# load packages -----------------------------------------------------------
+library(data.table)
+library(dplyr)
+
+# Step 1: all birth in HES =================================================
+## load the file -----------------------------------------------------------
+BT <- fread(paste0(master_dir, "HES_APC_Baby_Tail_clean_vars_combined.csv"))
+
+## filter ------------------------------------------------------------------
+#count numbers of birth before 01Sep2012 and after 31Aug2020
+BT_count_1 <- BT[BT$bday < "2012-09-01",]
+BT_count_2 <- BT[BT$bday > "2020-03-31",]
+
+#select birth from 01Sep2012 to 31Mar2020
+sum(is.na(BT$bday))
+Step1 <- BT[BT$bday >= "2012-09-01" & BT$bday <= "2020-03-31",c('encrypted_hesid','sex','matage','birweit','gestat','bday','ydob')]
+
+#check missingness
+sum(is.na(Step1$matage))
+sum(is.na(Step1$birweit))
+sum(is.na(Step1$gestat))
+
+## Export csv --------------------------------------------------------------
+fwrite(Step1, paste0(data_dir, "Step1.csv"))
+Step1 <- fread(paste0(data_dir,"Step1.csv"))
+
+# Step 2: death ============================================================
+## load the file -----------------------------------------------------------
+Death_v2 <- fread(paste0(master_dir,"HES_Death_all_data_v2/HES_Death_all_data_wide_v2.csv"))
+
+## filter ------------------------------------------------------------------
+#select age at death and exclude duplicates
+sum(duplicated(Death_v2)) #no duplicate values
+Death_v2 <- Death_v2[,.(encrypted_hesid,age_at_death)]
+
+#mortality before 1 only
+Death_v2[age_at_death != 0, infant_death := NA_integer_]
+Death_v2[age_at_death == 0, infant_death := 1]
+
+#mortality between 1-5
+Death_v2[, death_1_to_5 := ifelse(age_at_death >= 1 & age_at_death <= 4)]
+
+## merge -------------------------------------------------------------------
+Step2 <- merge(Step1, Death_v2, by="encrypted_hesid", all.x=TRUE)
+Step2[is.na(infant_death), infant_death := 0]
+Step2[is.na(death_1_to_5), infant_death := 0]
+death_count_1 <- Death_v2[infant_death == 1, .N]
+death_count_2 <- Death_v2[age_at_death >= 1 & age_at_death <= 4, .N]
+
+## Export csv --------------------------------------------------------------
+fwrite(Step2,paste0(data_dir,"Step2.csv"))
+Step2 <- fread(paste0(data_dir,"Step2.csv"))
+
+# Step 3: link HESID-aPMR ==================================================
+## load the file -----------------------------------------------------------
+HES_NPD <- fread(paste0(master_dir,"NPD_HES_Linkage_Spine.csv"))[,.(PupilMatchingRefAnonymous,encrypted_hesid)]
+
+## merge ------------------------------------------------------------------
+Step3 <- merge(Step2,HES_NPD,by="encrypted_hesid",all.x=TRUE)
+sum(is.na(Step3$PupilMatchingRefAnonymous))
+
+## Export csv --------------------------------------------------------------
+fwrite(Step3,paste0(data_dir,"Step3.csv"))
+Step3 <- fread(paste0(data_dir,"Step3.csv"))
+
+# Step 4: mother-baby linkage ==============================================
+## load the file -----------------------------------------------------------
+HES_TPI <- fread(paste0(master_dir,"hesid_tokenpersonid_links/encrypted_hesid_tokenpersonid_attendkey-epikey-aekey_unique_20220614.csv"))
+mb <- fread(paste0(master_dir,"Mother baby link/MB_id_list.csv"))
+NPD_HES <- fread(paste0(master_dir,"NPD_HES_Linkage_Spine.csv"))[,.(PupilMatchingRefAnonymous,encrypted_hesid)]
+DOB <- fread(paste0(master_dir,"HES_APC_mybirth_combined.csv"))
+
+## add approximate mothers yob ---------------------------------------------
+library(lubridate)
+Step6.0[,a_myob := fifelse(
+  is.na(bday) | is.na(matage),
+  NA_character_,
+  fifelse(
+    month(bday) %in% 9:12,
+    paste0(ydob - matage, "/", ydob - matage + 1),
+    paste0(ydob - matage - 1, "/", ydob - matage)
+  )
+)]
+
+Step6.0[,a_myob_group := fifelse(
+  is.na(a_myob),
+  NA_character_,
+  fifelse(a_myob <= "1994/1995", "<=1994/1995", ">=1995/1996")
+)]
+
+#change "Step3" to later data to roughly calculate mother's year of birth
+summary_table <- Step6.0[, .(
+  n = .N,
+  pct = paste0(round(.N / nrow(Step6.0) * 100), "%")
+), by = a_myob_group]
+unique(Step6.0$a_myob)
+
+## baby HESID-TPI merge ----------------------------------------------------
+names(HES_TPI)[1] <- "tokenid"
+b_HES_TPI <- merge(Step3, HES_TPI, by="encrypted_hesid")
+
+#linkage rate
+table(b_HES_TPI$ydob)
+table(Step3$ydob)
+round((table(b_HES_TPI$ydob) / table(Step3$ydob)) * 100, 2)
+
+## MB TPI merge -----------------------------------------------------------
+mb_NA <- mb[!complete.cases(birstat_clean), .(birstat_clean,birweit_clean,gestat_clean)]
+mb_NA[is.na(birstat_clean) & is.na(birweit_clean) & is.na(gestat_clean), .N]
+mb_NA[is.na(birstat_clean) & !is.na(birweit_clean) & !is.na(gestat_clean), .N]
+mb_NA[is.na(birstat_clean) & !is.na(birweit_clean) & is.na(gestat_clean), .N]
+mb_NA[is.na(birstat_clean) & is.na(birweit_clean) & !is.na(gestat_clean), .N]
+
+#keep selected columns only
+unique(mb$birstat_clean)
+mb[is.na(birstat_clean), .N]
+
+mb[birstat_clean == 1, .N]
+
+mb_select <- mb[,.(tokenid,mtokenid,matage_clean,sibling_n,gestat_clean,birweit_clean,imd04_decile_cat_clean,birstat_clean)]
+mb_select <- mb_select[birstat_clean == 1]
+
+mb_TPI <- merge(b_HES_TPI,mb_select,by="tokenid")
+
+#linkage rate
+table(mb_TPI$ydob)
+round((table(mb_TPI$ydob) / table(b_HES_TPI$ydob)) * 100, 2)
+
+## mother TPI-HES merge ---------------------------------------------------
+names(HES_TPI)[1] <- "mtokenid"
+names(HES_TPI)[2] <- "m_encrypted_hesid"
+m_TPI_HES <- merge(mb_TPI,HES_TPI,by="mtokenid")
+
+#linkage rate
+table(m_TPI_HES$ydob)
+round((table(m_TPI_HES$ydob) / table(mb_TPI$ydob)) * 100, 2)
+
+## mother HESID-aPMR merge -------------------------------------------------
+names(NPD_HES)[1] <- "m_PupilMatchingRefAnonymous"
+names(NPD_HES)[2] <- "m_encrypted_hesid"
+m_HES_NPD <- merge(m_TPI_HES,NPD_HES,by="m_encrypted_hesid")
+
+#linkage rate
+table(m_HES_NPD$ydob)
+round((table(m_HES_NPD$ydob) / table(m_TPI_HES$ydob)) * 100, 2)
+
+## reduce missing values ---------------------------------------------------
+#before merging values to NA
+sum(is.na(m_HES_NPD$matage))
+sum(is.na(m_HES_NPD$gestat))
+sum(is.na(m_HES_NPD$birweit))
+
+#missingness: matage_clean to matage, gestat_clean to gestat, birweit_clean to birweit
+Step6.0 <- m_HES_NPD[,matage := fifelse(is.na(matage) & !is.na(matage_clean),matage_clean,matage)][,matage_clean := NULL]
+Step6.0 <- Step6.0[,gestat := fifelse(is.na(gestat) & !is.na(gestat_clean),gestat_clean,gestat)][,gestat_clean := NULL]
+Step6.0 <- Step6.0[,birweit := fifelse(is.na(birweit) & !is.na(birweit_clean),birweit_clean,birweit)][,birweit_clean := NULL]
+
+#after merging values to NA
+sum(is.na(Step6.0$matage))
+sum(is.na(Step6.0$gestat))
+sum(is.na(Step6.0$birweit))
+
+## mothers gave birth >=17 -------------------------------------------------
+#add mother's birthday
+names(DOB)[1] <- "m_encrypted_hesid"
+names(DOB)[2] <- "m_bday"
+DOB$m_cydob <- as.integer(format(DOB$m_bday,"%Y"))
+Step4 <- merge(Step6.0,DOB,by="m_encrypted_hesid",all.x=TRUE)
+
+#missingness: matage_baby to matage
+sum(is.na(Step4$bday))
+sum(is.na(Step4$m_bday))
+
+#recalculate mother's year of giving birth
+threshold <- as.Date("1995-09-01")
+Step4[, mom_birth_cat := fifelse(is.na(m_bday), "NA",
+                                 fifelse(m_bday < threshold, "<1995-09",
+                                         ">=1995-09"))]
+summary_table <- Step4[, .(
+  n = .N,
+  pct = paste0(round(.N / nrow(Step4) * 100, 0), "%")
+), by = mom_birth_cat]
+unique(Step4$m_bday)
+
+#added missing matage
+Step4[, matage_new := as.integer((bday - m_bday) / 365.25)]
+Step4[!is.na(matage_new), matage := matage_new]
+Step4[, matage_new := NULL]
+
+sum(is.na(Step4$matage))
+
+#select maternal age at birth >=17
+Step4 <- Step4[matage >= 17]
+Step4 <- Step4[Step4$m_bday >= "1995-09-01",]
+
+#keep mom's age at first birth and keep the integer part only
+Step4[,matage_first := as.integer(as.numeric(difftime(min(bday), m_bday, units = "days")) / 365.25), by = m_encrypted_hesid]
+Step4 <- Step4[matage_first >= 17]
+
+#missingness doesn't change a lot after selecting mothers gave birth >= 17
+sum(is.na(Step4$matage))
+sum(is.na(Step4$gestat))
+sum(is.na(Step4$birweit))
+sum(is.na(Step4$imd04_decile_cat_clean))
+
+## add values --------------------------------------------------------------
+#change birth weight to binary outcome
+Step4[birweit >= 2500, birweit_bin := 0]
+Step4[birweit < 2500, birweit_bin := 1]
+
+#change gestational age to categorical/binary outcome
+#Step4[gestat >= 37, gestat_cat := 0]
+#Step4[gestat >= 32 & gestat <= 36, gestat_cat := 1]
+#Step4[gestat >= 28 & gestat <= 31, gestat_cat := 2]
+#Step4[gestat < 28, gestat_cat := 3]
+
+Step4[gestat >= 37, gestat_bin := 0]
+Step4[gestat <= 36, gestat_bin := 1]
+
+## add variables -----------------------------------------------------------
+#IMD: decile to quintile (1&2-1, 3&4-2, 5&6-3, 7&8-4, 9&10-5)
+Step4[imd04_decile_cat_clean %in% c(1,2), imd_5 := 1]
+Step4[imd04_decile_cat_clean %in% c(3,4), imd_5 := 2]
+Step4[imd04_decile_cat_clean %in% c(5,6), imd_5 := 3]
+Step4[imd04_decile_cat_clean %in% c(7,8), imd_5 := 4]
+Step4[imd04_decile_cat_clean %in% c(9,10), imd_5 := 5]
+
+#FSM & IMD interaction
+#Step6[PupilMatchingRefAnonymous == "", PupilMatchingRefAnonymous := NA]
+#Step6[,FSMeligible := fifelse(!is.na(PupilMatchingRefAnonymous) & is.na(FSMeligible), "0",
+#                      fifelse(FSMeligible == 1, "1", NA_character_))]
+#Step6[,imd_FSM := fifelse(is.na(imd_5) | is.na(FSMeligible),
+#                          NA_character_,
+#                          paste0("imd_", imd_5, "_FSM_", FSMeligible))]
+#sum(is.na(Step6$imd_FSM))
+
+#change the order
+Step4 <- Step4[,c(1:6,20,7,21,8,22,9:15,23,16:19)]
+
+## mother academic yob -----------------------------------------------------
+#library(lubridate)
+#Step6[,a_myob := fifelse(
+#  is.na(bday) | is.na(matage),
+#  NA_character_,
+#  fifelse(
+#    month(bday) %in% 9:12,
+#    paste0(ydob - matage, "/", ydob - matage + 1),
+#    paste0(ydob - matage - 1, "/", ydob - matage)
+#  )
+#)]
+#Step6[,a_myob_group := fifelse(
+#  is.na(a_myob),
+#  NA_character_,
+#  fifelse(a_myob <= "1994/1995", "<=1994/1995", ">=1995/1996")
+#)]
+#Step1 <- Step1[,c(1:5,11:12,6:10)]
+
+#freq_myob <- Step6[, .N, by = .(a_myob)]
+#freq_myob[,prop := round(N / sum(N) * 100, 1)]
+
+#freq_myob_group <- Step6[, .N, by = .(a_myob_group)]
+#freq_myob_group[,prop := round(N / sum(N) * 100, 1)]
+
+#freq_sex1 <- Step1[, .N, by = .(sex)]
+#freq_sex1[,prop := round(N / sum(N) * 100, 1)]
+#freq_sex6 <- Step6[, .N, by = .(sex)]
+#freq_sex6[,prop := round(N / sum(N) * 100, 1)]
+
+## Export csv --------------------------------------------------------------
+fwrite(Step4, paste0(data_dir, "Step4.csv"))
+Step4 <- fread(paste0(data_dir,"Step4.csv"))
+
+# Step 5: ethnos + hardelid code list ======================================
+## ethnicity ---------------------------------------------------------------
+#load the file
+ETHNOS <- fread(paste0(master_dir, "HES_APC_Ethnos_New_Modal.csv"))
+
+#Select mother's ethnicity
+ETHNOS_select <- ETHNOS[,.(encrypted_hesid,ethnos_description)]
+sum(duplicated(ETHNOS_select$encrypted_hesid))
+
+#change columns name to mother's tail
+names(ETHNOS_select)[1] <- "m_encrypted_hesid"
+names(ETHNOS_select)[2] <- "m_ethnos_description"
+
+#Left join Step4 with ETHNOS
+Step5_ETHNOS <- merge(Step4,ETHNOS_select,by="m_encrypted_hesid",all.x=TRUE)
+
+#check NA in mother's ethnicity
+#sum(Step5_ETHNOS$m_ethnos_description == "")
+sum(is.na(Step5_ETHNOS$m_ethnos_description))
+
+#ethnicity: grouped
+Step5_ETHNOS[m_ethnos_description %in% c("Bangladeshi (Asian or Asian British)","Indian (Asian or Asian British)","Pakistani (Asian or Asian British)","Any other Asian Background"), m_ethnos_group := "Asian or Asian British"]
+Step5_ETHNOS[m_ethnos_description %in% c("African (Black or Black British)","Carribean (Black or Black British)","Any other Black Background"), m_ethnos_group := "Black or Black British"]
+Step5_ETHNOS[m_ethnos_description %in% c("White and Asian (mixed)","White and Black African (mixed)","White and Black Carribean (mixed)","Any other Mixed Background"), m_ethnos_group := "Mixed"]
+Step5_ETHNOS[m_ethnos_description %in% c("British (White)","Irish (White)","Any other White Background"), m_ethnos_group := "White"]
+Step5_ETHNOS[m_ethnos_description %in% c("Chinese (other ethnic group)","Any other ethnic group"), m_ethnos_group := "Other (including Chinese)"]
+#sum(Step5_ETHNOS$m_ethnos_group == "")
+sum(is.na(Step5_ETHNOS$m_ethnos_group))
+
+## diag - from Matt's code -------------------------------------------------
+diagnoses <- fread(paste0(master_dir, "HES_APC_DIAG_combined.csv"),
+                   header = T,
+                   stringsAsFactors = F)
+
+# keep HESID if occurred in both diagnoses and previous step
+diagnoses <- diagnoses[encrypted_hesid %in% Step5_ETHNOS$m_encrypted_hesid]
+diagnoses <- diagnoses[epistart < as.Date("2020-08-31")]
+
+# calculate LOS using the cleaned start and end dates
+# get admission dates and startage
+all_episodes <- fread(paste0(master_dir, "HES_APC_DIS_ADMI_EPI_combined.csv"),
+                      header = T,
+                      stringsAsFactors = F)
+
+all_episodes <- all_episodes[encrypted_hesid %in% diagnoses$encrypted_hesid &
+                               epikey %in% diagnoses$epikey]
+
+# check for missing disdate
+# if dates are missing because they're in the final year:
+#all_episodes[admidate >= as.Date("2020-04-01"), disdate := as.Date("2020-08-31")]
+
+all_episodes[!is.na(epiend) & is.na(disdate), disdate := epiend]
+
+diagnoses[, epikey := as.numeric(epikey)] #warning message: In as.double.integer64(epikey) : integer precision lost while converting to double
+
+diagnoses <- merge(diagnoses,
+                   all_episodes[, c("encrypted_hesid",
+                                    "epikey",
+                                    "admidate",
+                                    "disdate")],
+                   by = c("encrypted_hesid","epikey"),
+                   all.x = T)
+
+rm(all_episodes); gc()
+
+diagnoses[, admi_los_nights := as.integer(difftime(disdate, admidate, units = "days"))]
+summary(diagnoses$admi_los_nights)
+
+## Hardelid cleaning -------------------------------------------------------
+hardelid <- fread("P:/Working/Matt/code lists/hardelid_v1.csv",
+                  header = T,
+                  stringsAsFactors = F)
+
+#exclude columns & remove dots
+hardelid[,c("code_nodot","category","description") := NULL]
+hardelid[, code := gsub("\\.", "", code)]
+
+## Herbert cleaning --------------------------------------------------------
+herbert <- fread("P:/Working/Steffi/adversity related injury codes_Herbert.csv",
+                 header = T,
+                 stringsAsFactors = F)
+
+#change the column name to match Hardelid's ('Group' to 'type')
+names(herbert)[2] <- "type"
+
+#exclude columns & remove dots
+herbert[,c("Subgroup","Criteria") := NULL]
+herbert[, code := gsub("\\.", "", code)]
+
+#add column: flag
+if (!"flag" %in% names(herbert)) {
+  herbert[,flag := ""]
+}
+
+## hardelid & herbert ------------------------------------------------------
+#combine the two codelists, retaining only the Herbert code if duplicated
+hardelid_herbert <- rbind(herbert,hardelid)[!duplicated(code),]
+
+diagnoses[, diag := substr(diag, 1, 4)]
+
+diagnoses[, chc_hardelid_herbert := F]
+diagnoses[, diag_for_link := diag]
+
+diagnoses[substr(diag, 1, 3) %in% hardelid_herbert[nchar(code) == 3]$code, chc_hardelid_herbert := T]
+diagnoses[substr(diag, 1, 3) %in% hardelid_herbert[nchar(code) == 3]$code, diag_for_link := substr(diag, 1, 3)]
+
+diagnoses[substr(diag, 1, 4) %in% hardelid_herbert[nchar(code) == 4]$code, chc_hardelid_herbert := T]
+diagnoses[substr(diag, 1, 4) %in% hardelid_herbert[nchar(code) == 4]$code, diag_for_link := substr(diag, 1, 4)]
+
+hardelid_herbert_diagnoses <- diagnoses[chc_hardelid_herbert == T]
+hardelid_herbert_diagnoses[, chc_hardelid_herbert := NULL]
+
+hardelid_herbert_diagnoses <- merge(hardelid_herbert_diagnoses,
+                            hardelid_herbert[, c("code", "flag", "type")],
+                            by.x = "diag_for_link",
+                            by.y = "code",
+                            all.x = T)
+
+rm(hardelid_herbert)
+
+# deal with flags
+hardelid_herbert_diagnoses[startage >= 7001, startage := 0]
+hardelid_herbert_diagnoses[, drop := F]
+hardelid_herbert_diagnoses[flag == "LOS3" & admi_los_nights < 3, drop := T]
+hardelid_herbert_diagnoses[flag == "AGE10" & startage < 10, drop := T]
+hardelid_herbert_diagnoses <- hardelid_herbert_diagnoses[drop == F]
+hardelid_herbert_diagnoses[, drop := NULL]
+
+# tidy
+hardelid_herbert_diagnoses <- hardelid_herbert_diagnoses[, c("encrypted_hesid", "diag", "type", "epistart")]
+table(hardelid_herbert_diagnoses$type, useNA = "always")
+
+#change specific types to general types
+hardelid_herbert_diagnoses[type %in% c("Accidents","Drug or Alcohol misuse","Self-harm","Violence"), type := "Adversity"]
+hardelid_herbert_diagnoses[type %in% c("Cancer/Blood","Cardiovascular","Self-harm","Violence","Chronic infections","Codes indicating non-specific chronic condition","Metabolic/endocrine/digestive/renal/genitourinary","Musculoskeletal/skin","Neurological","Respiratory"), type := "Chronic Conditions"]
+
+## filter ------------------------------------------------------------------
+#drop diagnoses that occurred >2 years before the birth
+get_hardelid_herbert <- function(bday, m_encrypted_hesid, years) {
+  has_chc <- m_encrypted_hesid %in% hardelid_herbert_diagnoses[epistart >= bday - trunc(365.25 * years) &
+                                                                 epistart < bday, encrypted_hesid]
+  return(has_chc)
+}
+Step5 <- Step5_ETHNOS[, any_hardelid_herbert := get_hardelid_herbert(bday, m_encrypted_hesid, years = 2), by = .(encrypted_hesid)]
+sum(is.na(Step5$any_hardelid_herbert))
+
+#drop adversity, mental health, and chronic health diagnoses that occurred >2 years before the birth
+get_hardelid_herbert_type <- function(bday, m_encrypted_hesid, chc_type = NULL, years) {
+  if (!is.null(chc_type)) {
+    has_chc <- m_encrypted_hesid %in% 
+      hardelid_herbert_diagnoses[epistart >= bday - trunc(365.25 * years) &
+                           epistart < bday &
+                           type == chc_type]$encrypted_hesid
+  } else {
+    has_chc <- m_encrypted_hesid %in% 
+      hardelid_herbert_diagnoses[epistart >= (bday - trunc(365.25 * years)) &
+                           epistart < bday]$encrypted_hesid
+  }
+  return(has_chc)
+}
+
+Step5[, adv_hardelid_herbert := get_hardelid_herbert_type(bday = bday, m_encrypted_hesid = m_encrypted_hesid, chc_type = "Adversity", years = 2), by = .(encrypted_hesid)]
+Step5[, mh_hardelid_herbert := get_hardelid_herbert_type(bday = bday, m_encrypted_hesid = m_encrypted_hesid, chc_type = "Mental health/behavioural", years = 2), by = .(encrypted_hesid)]
+Step5[, cc_hardelid_herbert := get_hardelid_herbert_type(bday = bday, m_encrypted_hesid = m_encrypted_hesid, chc_type = "Chronic Conditions", years = 2), by = .(encrypted_hesid)]
+
+## Export csv --------------------------------------------------------------
+fwrite(Step5, paste0(data_dir, "Step5.csv"))
+Step5 <- fread(paste0(data_dir,"Step5.csv"))
+
+unique(hardelid_diagnoses$type)
+table(Step5$any_hardelid_herbert)
+table(Step5$mh_hardelid_herbert)
+
+# Step 6: covariates from mother's tail ====================================
+## load the file -----------------------------------------------------------
+KS4_1 <- fread(paste0(KS4_dir,"KS4Pupil_2002_to_2014.csv"))
+KS4_2 <- fread(paste0(KS4_dir,"KS4Pupil_2015_to_2021.csv"))
+FSM <- fread(paste0(master_dir,"NPD_Census_FSMeligible.csv"))
+SEN <- fread(paste0(master_dir,"NPD_SEN_data_clean/NPD_SEN_provision_data_clean.csv"))
+#lng <- fread(paste0(master_dir,"NPD_Census_Language_LanguageGroupMajor_modal.csv"))
+
+## KS4 ---------------------------------------------------------------------
+#change NULL to NA
+KS4_1[, KS4_LEVEL2 := as.numeric(KS4_LEVEL2)]
+KS4_1[, KS4_FIVEAC_PTQ := as.numeric(KS4_FIVEAC_PTQ)]
+KS4_2[, KS4_GLEVEL2_PTQ_EE := as.numeric(KS4_GLEVEL2_PTQ_EE)]
+sum(is.na(KS4_1$KS4_LEVEL2))
+sum(is.na(KS4_1$KS4_FIVEAC_PTQ))
+sum(is.na(KS4_2$KS4_GLEVEL2_PTQ_EE))
+
+#merge KS4_LEVEL2 & KS4_FIVEAC_PTQ
+KS4_1[KS4_ACADYR == "2013/2014", KS4_LEVEL2 := KS4_FIVEAC_PTQ]
+KS4_1[, KS4_FIVEAC_PTQ := NULL]
+
+#keep the largest value (reached the expected level)
+KS4_1_largest <- KS4_1[,.(KS4_LEVEL2 = if (all(is.na(KS4_LEVEL2))) NA_real_ else max(KS4_LEVEL2, na.rm = TRUE)), by = KS4_PupilMatchingRefAnonymous]
+KS4_2_largest <- KS4_2[,.(KS4_GLEVEL2_PTQ_EE = if (all(is.na(KS4_GLEVEL2_PTQ_EE))) NA_real_ else max(KS4_GLEVEL2_PTQ_EE, na.rm = TRUE)), by = KS4_PupilMatchingRefAnonymous]
+
+sum(duplicated(KS4_1_largest$m_PupilMatchingRefAnonymous))
+sum(duplicated(KS4_2_largest$m_PupilMatchingRefAnonymous))
+
+#Check duplicated in two datasets
+common_aPMR <- KS4_1_largest[KS4_2_largest, on="KS4_PupilMatchingRefAnonymous",nomatch=0]
+
+#Merge two datasets and keep the largest score for same aPMR
+setnames(KS4_1_largest,"KS4_LEVEL2","KS4_bin")
+setnames(KS4_2_largest,"KS4_GLEVEL2_PTQ_EE","KS4_bin")
+
+KS4_combined <- rbind(KS4_1_largest,KS4_2_largest,use.names = TRUE, fill = TRUE)
+KS4_final <- KS4_combined[,
+                          .(KS4_bin = if (all(is.na(KS4_bin))) NA_real_ else max(KS4_bin, na.rm = TRUE)),
+                          by = KS4_PupilMatchingRefAnonymous]
+
+setnames(KS4_final,"KS4_PupilMatchingRefAnonymous","m_PupilMatchingRefAnonymous")
+
+sum(duplicated(KS4_final$m_PupilMatchingRefAnonymous)) #no duplicated values
+
+Step6_KS4 <- merge(Step5,KS4_final,by="m_PupilMatchingRefAnonymous",all.x=TRUE)
+sum(is.na(Step6_KS4$KS4_bin))
+
+Step6_KS4[,KS4_bin := as.character(KS4_bin)]
+Step6_KS4[is.na(KS4_bin), KS4_bin := "didn't sit / no data"]
+
+## FSM ------------------------------------------------------------------
+#keep the last 4 characters of term year
+FSM$FSM_year <- as.integer(substr(FSM$term_year, nchar(FSM$term_year) - 3, nchar(FSM$term_year)))
+
+#change columns name to mother's tail
+names(FSM)[1] <- "m_PupilMatchingRefAnonymous"
+names(FSM)[2] <- "m_FSMeligible"
+
+#keep the first FSM record per mother only
+FSM_unique <- FSM %>%
+  group_by(m_PupilMatchingRefAnonymous) %>%
+  filter(FSM_year == min(FSM_year)) %>%
+  ungroup()
+FSM_unique <- FSM_unique[!duplicated(FSM_unique),]
+
+#add birthday into current dataset
+FSM_merge <- merge(Step6_KS4,FSM_unique,by="m_PupilMatchingRefAnonymous",all.x=TRUE)
+
+#if mother's birth month<9, then their KS4_year(<16yr)=ydob+16, else =ydob+15 
+FSM_KS4 <- FSM_merge %>%
+  mutate(
+    KS4=if_else(as.integer(format(m_bday,"%m")) < 9, m_cydob + 16, m_cydob + 15)
+  )
+
+#keep FSM_year less than KS4_year only
+FSM_select <- filter(FSM_KS4, FSM_year <= KS4)
+FSM_select <- FSM_select[,.(m_PupilMatchingRefAnonymous, m_FSMeligible)]
+
+#keep the unique FSM data per person only
+FSM_final <- unique(FSM_select)
+
+#left join Step8_KS4 with FSM_final
+Step6_FSM <- merge(Step6_KS4,FSM_final,by="m_PupilMatchingRefAnonymous",all.x=TRUE)
+sum(is.na(Step6_FSM$m_FSMeligible))
+Step6_FSM[is.na(m_FSMeligible), m_FSMeligible := 0]
+
+#FSM & IMD interaction
+#Step6_FSM[,imd_mFSM := fifelse(is.na(imd_5), NA_character_,
+#                       paste0("imd_", imd_5, "_mFSM_", m_FSMeligible))]
+
+## SEN ------------------------------------------------------------------
+sum(is.na(SEN$sen_provision))
+
+#keep mothers who have ever had SEN record
+#want both 1 - SEN support and no statement, 2 - Statement of SEN but don't need to distinguish, so change =2 to =1
+SEN[sen_provision == 2, sen_provision := 1]
+
+#keep the first SEN record per mother only
+SEN_unique <- SEN %>%
+  group_by(PupilMatchingRefAnonymous) %>%
+  filter(school_year_start == min(school_year_start)) %>%
+  ungroup()
+SEN_unique <- SEN_unique[,c(1,5,6)]
+SEN_unique <- SEN_unique[!duplicated(SEN_unique),]
+
+#change columns name to mother's tail
+names(SEN_unique)[1] <- "m_PupilMatchingRefAnonymous"
+names(SEN_unique)[2] <- "m_sen_provision"
+
+#add birthday into current dataset
+SEN_merge <- merge(Step6_FSM,SEN_unique,by="m_PupilMatchingRefAnonymous",all.x=TRUE)
+
+#if mother's birth month<9, then their KS4_year(<16yr)=ydob+16, else =ydob+15 
+SEN_KS4 <- SEN_merge %>%
+  mutate(
+    KS4=if_else(as.integer(format(m_bday,"%m")) < 9, m_cydob + 16, m_cydob + 15)
+  )
+
+#keep school_year_start less than KS4_year only
+SEN_select <- filter(SEN_KS4, school_year_start <= KS4)
+SEN_select <- SEN_select[,.(m_PupilMatchingRefAnonymous,m_sen_provision)]
+
+#keep the unique SEN data per person only
+SEN_final <- unique(SEN_select)
+
+#left join Step8_FSM with SEN_final
+Step6 <- merge(Step6_FSM,SEN_final,by="m_PupilMatchingRefAnonymous",all.x=TRUE)
+sum(is.na(Step6$m_sen_provision))
+
+Step6[is.na(m_sen_provision), m_sen_provision := 0]
+
+## lng ------------------------------------------------------------------
+#names(lng)[1] <- "m_PupilMatchingRefAnonymous"
+#names(lng)[2] <- "m_LanguageGroupMajor"
+
+#change LanguageGroupMajor=3_UNCL(unclassified) to NA
+#lng$m_LanguageGroupMajor[lng$m_LanguageGroupMajor == "3_UNCL"] <- NA
+
+#left join Step6_SEN with lng
+#Step6 <- merge(Step6_SEN,lng,by="m_PupilMatchingRefAnonymous",all.x=TRUE)
+#sum(is.na(Step6$m_LanguageGroupMajor))
+
+## Export csv --------------------------------------------------------------
+fwrite(Step6, paste0(data_dir, "Step6.csv"))
+Step6 <- fread(paste0(data_dir,"Step6.csv"))
+
+# Step 7: CSC data =========================================================
+## load the file -----------------------------------------------------------
+CiN <- fread(paste0(master_dir,"csc/cin.csv"))
+CLA <- fread(paste0(master_dir,"csc/cla.csv"))
+
+## filter ------------------------------------------------------------------
+#check NA
+sum(is.na(CiN$need_episode))
+sum(is.na(CiN$cpp))
+names(CiN)[41] <- "CIN"
+names(CiN)[42] <- "CPP"
+
+#exclude rows that don't have aPMR
+CiN <- CiN[CiN$pupilmatchingrefanonymous != "", ]
+CLA <- CLA[CLA$pupilmatchingrefanonymous != "", ]
+
+#exclude respite care in CLA
+CLA <- CLA[!legal_status %in% c("V1","V3","V4")]
+
+#select CSC from 11 to 16
+CiN[,acadyr := as.integer(substr(acadyr,1,4))] #keep the first 4 characters
+CiN[,CiN_age := acadyr - birthayear]
+CiN_select <- CiN[CiN_age >= 11 & CiN_age <= 16]
+
+CLA[,CLA_age := epiayear - birthayear]
+CLA_select <- CLA[CLA_age >= 11 & CLA_age <= 16]
+
+#change TRUE/FALSE to 1/0
+CiN$CIN <- as.integer(CiN$CIN)
+CiN$CPP <- as.integer(CiN$CPP)
+
+#add column to assign all CLA=1
+CLA_select$CLA <- 1
+
+#one aPMR - one row
+CiN_unique <- CiN_select %>%
+  group_by(pupilmatchingrefanonymous) %>%
+  summarise(CIN = if_else(any(CIN == 1),1,0))
+
+CPP_unique <- CiN_select %>%
+  group_by(pupilmatchingrefanonymous) %>%
+  summarise(CPP = if_else(any(CPP == 1),1,0))
+
+CiN_CPP <- merge(CiN_unique,CPP_unique,by="pupilmatchingrefanonymous")
+
+sum(duplicated(CiN_CPP$pupilmatchingrefanonymous))
+
+#change columns name to mother's tail
+names(CiN_CPP)[1] <- "m_PupilMatchingRefAnonymous"
+names(CLA_select)[3] <- "m_PupilMatchingRefAnonymous"
+
+#keep the unique CLA data per person only
+CLA_final <- CLA_select[,.(m_PupilMatchingRefAnonymous,CLA)]
+CLA_final <- unique(CLA_final)
+sum(duplicated(CLA_final$m_PupilMatchingRefAnonymous))
+
+#merge CiN and CLA
+Step7_CiN <- merge(Step6,CiN_CPP,by="m_PupilMatchingRefAnonymous",all.x=TRUE)
+Step7_CSC <- merge(Step7_CiN,CLA_final,by="m_PupilMatchingRefAnonymous",all.x=TRUE)
+
+#CLA, CPP but not CLA, CiN but not CPP/CLA
+cla <- "cla"
+cpp <- "cpp"
+cin <- "cin"
+
+Step7_CSC[, highest_CSC := fcase(
+  CLA == 1, cla,
+  CPP == 1, cpp,
+  CIN == 1 & is.na(CLA) & CPP != 1, cin,
+  CIN == 1 & CLA != 1 & CPP != 1, cin,
+  default = NA_character_
+)]
+
+#check numbers of CLA, CPP, CiN and others
+CLA_count <- Step7_CSC[highest_CSC == "cla",.N]
+CPP_count <- Step7_CSC[highest_CSC == "cpp",.N]
+CiN_count <- Step7_CSC[highest_CSC == "cin",.N]
+sum(is.na(Step7_CSC$highest_CSC))
+
+#change NA to non-csc
+Step7_CSC[is.na(highest_CSC), highest_CSC := "non-csc"]
+Step7_CSC$highest_CSC <- factor(Step7_CSC$highest_CSC,levels = c("non-csc","cin","cpp","cla"))
+levels(Step7_CSC$highest_CSC)
+
+health_out <- Step7_CSC
+
+# something else ===========================================================
+## don't need it: add singleton / multiple info-----------------------------
+#health_out[, multiple_children := ifelse(.N > 1, 1, 0), by = m_PupilMatchingRefAnonymous]
+#health_out <- health_out[,c(1:8,38,9:37)]
+health_out[, multiple_children := NULL]
+
+## add child-level variable: first / other birth ---------------------------
+sum(is.na(health_out$bday))
+health_out <- health_out[order(m_encrypted_hesid, bday)]
+health_out[, first_child := as.integer(seq_len(.N) == 1), by = m_encrypted_hesid]
+health_out <- health_out[,c(1:9,39,10:38)]
+
+str(health_out$bday)
+
+## matage 17-18 / 19-24 ----------------------------------------------------
+health_out[matage >= 19, matage_bin := 0]
+health_out[matage >= 17 & matage <= 18, matage_bin := 1]
+health_out <- health_out[,c(1:7,39,8:38)]
+
+## change reference group --------------------------------------------------
+health_out$m_ethnos_group <- as.factor(health_out$m_ethnos_group)
+health_out$m_ethnos_group <- relevel(health_out$m_ethnos_group, ref = "White")
+health_out$imd_5 <- factor(health_out$imd_5,levels = c("5","4","3","2","1"))
+
+## Export csv --------------------------------------------------------------
+fwrite(health_out, paste0(data_dir, "health_out.csv"))
+health_out <- fread(paste0(data_dir,"health_out.csv"))
+health_out[, .N, by = highest_CSC]
