@@ -1,5 +1,5 @@
 **Figure 2**
-Below is the R code used to generate Figure 2.
+Below is the R code used to generate Figure 2, using the analysis results presented in Table 2.
 
 # load packages
 library(ggplot2)
