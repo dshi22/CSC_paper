@@ -1,0 +1,71 @@
+# working directory ------------------------------------------------------
+EYFSP_dir <- "P:/.../.../EYFSP/"
+data_dir <- "P:/.../.../data/"
+
+# load packages -----------------------------------------------------------
+library(data.table)
+library(dplyr)
+
+# Step 1: baby HESID fully linked aPMR =====================================
+## load the file -----------------------------------------------------------
+health_out <- fread(paste0(data_dir,"health_out.csv"))
+census_record <- fread(paste0(data_dir,"census_record.csv"))
+
+sum(duplicated(census_record$PupilMatchingRefAnonymous))
+
+## filter ------------------------------------------------------------------
+edu_out <- health_out[,ayob := ifelse(month(bday) >= 9, year(bday), year(bday) - 1)]
+edu_out <- edu_out[health_out$ayob >= "2012" & health_out$ayob <= "2013",]
+edu_out <- edu_out[!(age_at_death %in% 0:4)]
+
+edu_out[PupilMatchingRefAnonymous == "", PupilMatchingRefAnonymous := NA]
+sum(is.na(edu_out$PupilMatchingRefAnonymous))
+
+edu_out <- edu_out[!is.na(PupilMatchingRefAnonymous)]
+
+#check if pupil has Census record
+census_record <- unique(census_record, by = "PupilMatchingRefAnonymous")
+edu_out[,census := fifelse(PupilMatchingRefAnonymous %in% census_record$PupilMatchingRefAnonymous,1,0)]
+
+sum(is.na(census_record$PupilMatchingRefAnonymous))
+any(duplicated(census_record$PupilMatchingRefAnonymous))
+
+edu_out[,.N,by=census]
+Step1 <- edu_out
+
+## Export csv --------------------------------------------------------------
+fwrite(Step1, paste0(data_dir, "Step1.csv"))
+Step1 <- fread(paste0(data_dir,"Step1.csv"))
+
+# Step 2: add EYFSP result =================================================
+## load the file -----------------------------------------------------------
+EYFSP <- fread(paste0(EYFSP_dir,"eyfsp_attainment_all_ACJT.csv"))
+sum(is.na(EYFSP$eyfsp_gld))
+sum(is.na(EYFSP$eyfsp_expected_mat))
+
+## filter ------------------------------------------------------------------
+names(EYFSP)[1] <- "PupilMatchingRefAnonymous"
+EYFSP_gld <- EYFSP[,.(PupilMatchingRefAnonymous,eyfsp_gld)]
+edu_out <- merge(Step1,EYFSP_gld,by="PupilMatchingRefAnonymous", all.x=TRUE)
+sum(is.na(edu_out$eyfsp_gld))
+edu_out[census == 0 & !is.na(eyfsp_gld), .N]
+
+## assign EYFSP_gld = NA ---------------------------------------------------
+#assign to enroll but not sit and not enrolled
+edu_out$eyfsp_gld <- as.character(edu_out$eyfsp_gld)
+edu_out[is.na(eyfsp_gld) & census == 1, eyfsp_gld := "enrolled_not_sit"]
+edu_out[is.na(eyfsp_gld) & census == 0, eyfsp_gld := "not_enrolled"]
+
+## Export csv --------------------------------------------------------------
+fwrite(edu_out, paste0(data_dir, "edu_out.csv"))
+edu_out <- fread(paste0(data_dir,"edu_out.csv"))
+
+edu_out[, .N, by = highest_CSC]
+
+# something else ===========================================================
+## don't need singleton / multiple info-------------------------------------
+edu_out[, multiple_children := NULL]
+
+## add child-level variable: first / other birth ---------------------------
+edu_out <- edu_out[order(m_encrypted_hesid, bday)]
+edu_out[, first_child := as.integer(seq_len(.N) == 1), by = m_encrypted_hesid]
