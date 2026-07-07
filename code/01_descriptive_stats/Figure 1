@@ -1,5 +1,3 @@
-Descriptive statistics
-
 # working directory ------------------------------------------------------
 master_dir <- "P:/.../Master data TEST/"
 data_dir <- "P:/.../.../data/"
