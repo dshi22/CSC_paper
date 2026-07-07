@@ -10,7 +10,6 @@ Interaction analyses (maternal age × maternal CSC experience and first birth ×
 
 # working directory ------------------------------------------------------
 master_dir <- "P:/.../.../"
-steffi_dir <- "P:/.../.../.../.../"
 data_dir <- "P:/.../.../.../"
 
 # load packages -----------------------------------------------------------
@@ -119,8 +118,8 @@ ggplot(csc_results_dt,aes(x = reorder(variable,-statistic),y = statistic)) +
 ## birweit ~ covariates ----------------------------------------------------
 birweit <- model[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,birweit_bin,sex,imd_5,m_ethnos_group,first_child,matage_bin,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
 birweit <- na.omit(birweit)
-fwrite(birweit, paste0(steffi_dir, "birweit.csv"))
-birweit <- fread(paste0(steffi_dir, "birweit.csv"))
+fwrite(birweit, paste0(data_dir, "birweit.csv"))
+birweit <- fread(paste0(data_dir, "birweit.csv"))
 sum(is.na(model$birweit_bin))
 birweit[,.N,by=(highest_CSC)]
 
@@ -249,8 +248,8 @@ linearHypothesis(model_bw_em, matchCoefs(model_bw_em, pattern = ":"), vcov. = cl
 ## gestat ~ covariates -----------------------------------------------------
 gestat <- model[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,gestat_bin,sex,imd_5,m_ethnos_group,first_child,matage_bin,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
 gestat <- na.omit(gestat)
-fwrite(gestat, paste0(steffi_dir, "gestat.csv"))
-gestat <- fread(paste0(steffi_dir, "gestat.csv"))
+fwrite(gestat, paste0(data_dir, "gestat.csv"))
+gestat <- fread(paste0(data_dir, "gestat.csv"))
 sum(is.na(model$gestat_bin))
 zero_count <- gestat[, sum(gestat_bin == 0)]
 gestat[,.N,by=(highest_CSC)]
@@ -375,8 +374,8 @@ linearHypothesis(model_gestat_em, matchCoefs(model_gestat_em, pattern = ":"), vc
 ## death ~ covariates ------------------------------------------------------
 death <- model[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,infant_death,sex,imd_5,m_ethnos_group,first_child,matage_bin,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
 death <- na.omit(death)
-fwrite(death, paste0(steffi_dir, "death.csv"))
-death <- fread(paste0(steffi_dir, "death.csv"))
+fwrite(death, paste0(data_dir, "death.csv"))
+death <- fread(paste0(data_dir, "death.csv"))
 sum(is.na(model$infant_death))
 death[,.N,by=(highest_CSC)]
 
@@ -496,8 +495,8 @@ linearHypothesis(model_death_em, matchCoefs(model_death_em, pattern = ":"), vcov
 ## admi ~ covariates ------------------------------------------------------
 admi_1 <- model[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,unplanned_admission_1,sex,imd_5,m_ethnos_group,first_child,matage_bin,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
 admi_1 <- na.omit(admi_1)
-fwrite(admi_1, paste0(steffi_dir, "admi_1.csv"))
-admi_1 <- fread(paste0(steffi_dir, "admi_1.csv"))
+fwrite(admi_1, paste0(data_dir, "admi_1.csv"))
+admi_1 <- fread(paste0(data_dir, "admi_1.csv"))
 admi_1[,.N,by=(highest_CSC)]
 
 ## chi-square test ---------------------------------------------------------
@@ -616,8 +615,8 @@ linearHypothesis(model_admi_1_em, matchCoefs(model_admi_1_em, pattern = ":"), vc
 ## AE ~ covariates --------------------------------------------------------
 AE_1 <- model[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,AE_1,sex,imd_5,m_ethnos_group,first_child,matage_bin,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
 AE_1 <- na.omit(AE_1)
-fwrite(AE_1, paste0(steffi_dir, "AE_1.csv"))
-AE_1 <- fread(paste0(steffi_dir, "AE_1.csv"))
+fwrite(AE_1, paste0(data_dir, "AE_1.csv"))
+AE_1 <- fread(paste0(data_dir, "AE_1.csv"))
 AE_1[,.N,by=(highest_CSC)]
 
 ## chi-square test ---------------------------------------------------------
@@ -736,8 +735,8 @@ linearHypothesis(model_AE_1_em, matchCoefs(model_AE_1_em, pattern = ":"), vcov. 
 ## admi ~ covariates ------------------------------------------------------
 admi_5 <- model[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,unplanned_admission_1_5,sex,imd_5,m_ethnos_group,first_child,matage_bin,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
 admi_5 <- na.omit(admi_5)
-fwrite(admi_5, paste0(steffi_dir, "admi_5.csv"))
-admi_5 <- fread(paste0(steffi_dir, "admi_5.csv"))
+fwrite(admi_5, paste0(data_dir, "admi_5.csv"))
+admi_5 <- fread(paste0(data_dir, "admi_5.csv"))
 admi_5[,.N,by=(highest_CSC)]
 
 ## chi-square test ---------------------------------------------------------
@@ -857,8 +856,8 @@ linearHypothesis(model_admi_5_em, matchCoefs(model_admi_5_em, pattern = ":"), vc
 ## AE ~ covariates -------------------------------------------------------
 AE_5 <- model[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,AE_5,sex,imd_5,m_ethnos_group,first_child,matage_bin,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
 AE_5 <- na.omit(AE_5)
-fwrite(AE_5, paste0(steffi_dir, "AE_5.csv"))
-AE_5 <- fread(paste0(steffi_dir, "AE_5.csv"))
+fwrite(AE_5, paste0(data_dir, "AE_5.csv"))
+AE_5 <- fread(paste0(data_dir, "AE_5.csv"))
 AE_5[,.N,by=(highest_CSC)]
 
 ## chi-square test ---------------------------------------------------------
@@ -979,7 +978,7 @@ linearHypothesis(model_AE_5_em, matchCoefs(model_AE_5_em, pattern = ":"), vcov. 
 
 # working directory ------------------------------------------------------
 master_dir <- "P:/.../.../"
-steffi_dir <- "P:/.../.../.../model/"
+data_dir <- "P:/.../.../.../model/"
 
 # CSC ~ covariates =========================================================
 EYFSP <- fread(paste0("P:/.../.../.../EYFSP.csv"))
@@ -993,8 +992,8 @@ EYFSP$imd_5 <- factor(EYFSP$imd_5,levels = c("5","4","3","2","1"))
 
 ## select variables --------------------------------------------------------
 model_edu <- EYFSP[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,eyfsp_gld,sex,imd_5,m_ethnos_group,matage_bin,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
-fwrite(model_edu, paste0(steffi_dir, "model_edu.csv"))
-model_edu <- fread(paste0(steffi_dir, "model_edu.csv"))
+fwrite(model_edu, paste0(data_dir, "model_edu.csv"))
+model_edu <- fread(paste0(data_dir, "model_edu.csv"))
 
 #randomly keep mother's one child
 model_edu_unique <- model_edu %>%
@@ -1055,8 +1054,8 @@ EYFSP_all$eyfsp_gld <- as.numeric(EYFSP_all$eyfsp_gld)
 
 EYFSP_all[, eyfsp_gld := ifelse(eyfsp_gld == 0,1,0)]
 
-fwrite(EYFSP_all, paste0(steffi_dir, "EYFSP_all.csv"))
-EYFSP_all <- fread(paste0(steffi_dir, "EYFSP_all.csv"))
+fwrite(EYFSP_all, paste0(data_dir, "EYFSP_all.csv"))
+EYFSP_all <- fread(paste0(data_dir, "EYFSP_all.csv"))
 EYFSP_all[,.N,by=(highest_CSC)]
 EYFSP_all[,.N,by=(first_child)]
 
