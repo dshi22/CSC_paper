@@ -60,7 +60,7 @@ p1e <- plot_AR(filter(AR_CSC, outcome=="unplanned_admission_1_5"), 100, "1e. ≥
 p1f <- plot_AR(filter(AR_CSC, outcome=="AE_1"), 100, "1f. ≥1 A&E attendance (0-1y)")
 p1g <- plot_AR(filter(AR_CSC, outcome=="AE_5"), 100, "1g. ≥1 A&E attendance (1-5y)")
 
-# 3-2-2 layout with legend
+# create a custom legend box
 text_sz <- 5.5
 
 pleg <- ggplot() +
@@ -83,7 +83,7 @@ pleg <- ggplot() +
     plot.margin = margin(10, 10, 10, 10)
   )
 
-# output
+# output with 3-2-2 layout
 combined_final <- p1a + p1b + p1c + 
   p1d + p1e + plot_spacer() + 
   p1f + p1g + pleg + 
