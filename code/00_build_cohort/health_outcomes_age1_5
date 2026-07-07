@@ -1,0 +1,97 @@
+# working directory ------------------------------------------------------
+master_dir <- "P:/.../Master data TEST/"
+data_dir <- "P:/.../.../data/"
+
+# load packages -----------------------------------------------------------
+library(data.table)
+library(dplyr)
+health_out_age1_5 <- health_out_1_5[matage == 17]
+count <- health_out_age1_5[,.N, by = matage]
+
+# Step 1: subset reached age 5 / dead 1-5 ==================================
+## load the file -----------------------------------------------------------
+health_out <- fread(paste0(data_dir, "health_out.csv"))
+
+## filter reached age 5 ----------------------------------------------------
+Step1 <- health_out[health_out$bday >= "2012-09-01" & health_out$bday <= "2015-03-31",]
+Step1 <- Step1[infant_death != 1]
+
+## Export csv --------------------------------------------------------------
+fwrite(Step1,paste0(data_dir,"Step1.csv"))
+Step1 <- fread(paste0(data_dir,"Step1.csv"))
+
+# Step 2: unplanned hospital admission (new) ===============================
+## load the file -----------------------------------------------------------
+HA <- fread(paste0(master_dir, "HES_APC_DIS_ADMI_EPI_combined.csv"))
+
+## filter ------------------------------------------------------------------
+#exclude birth episode (epitype = 3) and same admidate per person
+HA_exbirth <- HA[epitype != 3][, .SD[1], by = .(encrypted_hesid,admidate)]
+
+#exclude admimeth=11,12,13 (planned admissions)
+HA_unplan <- HA_exbirth[!admimeth %in% c(11,12,13)]
+
+#assign 7001-7007 to 0 and select startage 1-5
+HA_unplan[startage %in% 7001:7007, startage := 0]
+HA_startage <- HA_unplan[startage >= 1 & startage < 5]
+
+#keep HESID and admission date only
+HA_startage <- HA_startage[,.(encrypted_hesid,admidate)]
+
+#calculate total unplanned admissions times via rows per person
+HA_final <- HA_startage[,.(unique_admidate = .N), by = encrypted_hesid]
+
+## merge ------------------------------------------------------------------
+Step2 <- merge(Step1,HA_final,by="encrypted_hesid",all.x=TRUE)
+Step2[is.na(unique_admidate), unique_admidate := 0]
+
+## final ------------------------------------------------------------------
+Step2[ ,unplanned_admission_1_5 := fifelse(unique_admidate >= 1 | death_1_to_5 == 1, 1, 0)]
+
+## Export csv --------------------------------------------------------------
+fwrite(Step2,paste0(data_dir,"Step2.csv"))
+Step2 <- fread(paste0(data_dir,"Step2.csv"))
+
+# Step 3: A&E admission ====================================================
+## load the file -----------------------------------------------------------
+AE <- fread(paste0(master_dir, "HES_AE_arrivaltime.csv"))
+
+## filter ------------------------------------------------------------------
+#add bday into AE data
+Step3.0 <- merge(AE,Step2,by="encrypted_hesid",all.x=TRUE)
+
+#calculate baby's age at admission via arrival date and bday
+AE_age <- Step3.0 %>%
+  mutate(attendence_age = as.numeric(difftime(arrivaldate,bday,units = 'days'))/365.25)
+
+#select baby's age 1-5
+AE_age_5 <- AE_age  %>%
+  filter(attendence_age >= 1 & attendence_age < 5)
+
+#calculate total A&E times via rows per person
+AE_final <- AE_age_5 %>%
+  group_by(encrypted_hesid) %>%
+  mutate(AE_time = n()) %>%
+  ungroup() %>%
+  distinct(encrypted_hesid,.keep_all=TRUE) %>%
+  select(encrypted_hesid,AE_time)
+
+## merge ------------------------------------------------------------------
+Step3 <- merge(Step2,AE_final,by="encrypted_hesid",all.x=TRUE)
+Step3[is.na(AE_time), AE_time := 0]
+
+## final ------------------------------------------------------------------
+Step3[ ,AE_5 := fifelse(AE_time >= 1 | death_1_to_5 == 1, 1, 0)]
+
+## Export csv --------------------------------------------------------------
+fwrite(Step3, paste0(data_dir, "health_out_age1_5.csv"))
+health_out_age1_5 <- fread(paste0(data_dir,"health_out_age1_5.csv"))
+health_out_age1_5[, .N, by = infant_death] #excluded all death before age 1
+
+# something else ===========================================================
+## don't need singleton / multiple info-------------------------------------
+health_out_age1_5[, multiple_children := NULL]
+
+## add child-level variable: first / other birth ---------------------------
+health_out_age1_5 <- health_out_age1_5[order(m_encrypted_hesid, bday)]
+health_out_age1_5[, first_child := as.integer(seq_len(.N) == 1), by = m_encrypted_hesid]
