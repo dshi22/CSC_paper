@@ -1,4 +1,4 @@
-**Main analysis for all health and educational outcomes: Table 2 + values in Figure 2**
+**Main analysis for all health and educational outcomes: Table 2**
 The main analyses were conducted using Poisson regression with robust standard errors clustered by siblings (children born to the same mother).  
 Interaction analyses (maternal age × maternal CSC experience and first birth × maternal CSC experience) were performed using Wald tests with cluster-robust standard errors (clustered by mother).
 
