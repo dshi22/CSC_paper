@@ -67,8 +67,8 @@ combined <- (p1a | p1b | p1c) /
 
 combined
 
-**Appendix Figure 2**
-Below is the R code used to generate Appendix Figure 2.  
+**Supplementary Figure 3**
+Below is the R code used to generate Supplementary Figure 3.  
 
 # maternal age ~ out =======================================================
 ## load the file ----------------------------------------------------------
