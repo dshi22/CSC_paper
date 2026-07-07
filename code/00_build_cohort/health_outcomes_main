@@ -6,6 +6,7 @@ data_dir <- "P:/.../.../data/"
 # load packages -----------------------------------------------------------
 library(data.table)
 library(dplyr)
+library(lubridate)
 
 # Step 1: all birth in HES =================================================
 ## load the file -----------------------------------------------------------
@@ -76,7 +77,6 @@ NPD_HES <- fread(paste0(master_dir,"NPD_HES_Linkage_Spine.csv"))[,.(PupilMatchin
 DOB <- fread(paste0(master_dir,"HES_APC_mybirth_combined.csv"))
 
 ## add approximate mothers yob ---------------------------------------------
-library(lubridate)
 Step6.0[,a_myob := fifelse(
   is.na(bday) | is.na(matage),
   NA_character_,
@@ -243,7 +243,6 @@ Step4[imd04_decile_cat_clean %in% c(9,10), imd_5 := 5]
 Step4 <- Step4[,c(1:6,20,7,21,8,22,9:15,23,16:19)]
 
 ## mother academic yob -----------------------------------------------------
-#library(lubridate)
 #Step6[,a_myob := fifelse(
 #  is.na(bday) | is.na(matage),
 #  NA_character_,
