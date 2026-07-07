@@ -20,8 +20,8 @@ The `00_build_cohort` directory contains scripts used to construct the analytica
 
 ### Analyses
 
-- `01_descriptive_stats` – scripts used to generate descriptive statistics, tables, and figures.
-- `02_main_analysis` – scripts used for regression analyses and the main results reported in the manuscript.
+- `01_descriptive_stats` – scripts used to generate `Table 1`, `Figure 1`, and `Supplementary Figure 3`.
+- `02_main_analysis` – scripts used to generate `Table 2` and `Figure 2`.
 
 ## Data availability
 
