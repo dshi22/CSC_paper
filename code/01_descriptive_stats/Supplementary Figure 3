@@ -1,1 +1,107 @@
+**Supplementary Figure 3**
+Below is the R code used to generate Supplementary Figure 3.  
 
+# maternal age ~ out =======================================================
+## load the file ----------------------------------------------------------
+AR_matage <- fread(paste0("D:/.../.../.../.../AR_matage.csv"))
+
+## draw the figure --------------------------------------------------------
+AR_matage <- AR_matage %>%
+  mutate(
+    outcome_label = case_when(
+      outcome == "birweit_bin" ~ "Low birth weight",
+      outcome == "gestat_bin" ~ "Preterm birth",
+      outcome == "infant_death" ~ "Infant mortality",
+      outcome == "unplanned_admission_1" ~ "\u2265 1 Unplanned admission (0-1y)",
+      outcome == "AE_1" ~ "\u2265 1 A&E attendance (0-1y)",
+      TRUE ~ outcome
+    )
+  ) %>%
+  mutate(risk = risk * 100) %>%
+  filter(!outcome %in% c("unplanned_admission_1_5","AE_5"))
+
+outcome_levels <- c("Low birth weight","Preterm birth","Infant mortality","\u2265 1 Unplanned admission (0-1y)","\u2265 1 A&E attendance (0-1y)")
+color_values <- c(
+  "Low birth weight" = "#1B9E77",
+  "Preterm birth" = "#D95F02",
+  "Infant mortality" = "#7570B3",
+  "\u2265 1 Unplanned admission (0-1y)" = "#E7298A",
+  "\u2265 1 A&E attendance (0-1y)" = "#66A61E"
+)
+
+AR_matage$outcome_label <- factor(AR_matage$outcome_label, levels = outcome_levels)
+
+theme_clean <- theme_bw(base_size = 14) +
+  theme(
+    panel.grid = element_blank(),
+    plot.title = element_blank(),
+    axis.title.x = element_blank(),
+    legend.position = "bottom",
+    legend.title = element_blank()
+  )
+
+p_birth <- AR_matage %>%
+  filter(outcome_label %in% c("Low birth weight","Preterm birth")) %>%
+  ggplot(aes(x = matage, y = risk, color = outcome_label)) +
+  geom_point(size = 2, shape = 4, stroke = 1.5, alpha = 1) +
+  geom_smooth(method = "loess", se = FALSE, size = 1.2) +
+  scale_y_continuous(labels = function(x) paste0(sprintf("%.1f",x), "%")) +
+  scale_color_manual(values = color_values, breaks = outcome_levels,
+                     guide = guide_legend(nrow = 1, byrow = TRUE)) +
+  scale_x_continuous(breaks = 17:24, limits = c(17,24)) +
+  labs(y = "AR (%)") +
+  theme_clean
+p_birth
+
+p_infant <- AR_matage %>%
+  filter(outcome_label == "Infant mortality") %>%
+  ggplot(aes(x = matage, y = risk, color = outcome_label)) +
+  geom_point(size = 2, shape = 4, stroke = 1.5, alpha = 1) +
+  geom_smooth(method = "loess", se = FALSE, size = 1.2) +
+  scale_y_continuous(labels = function(x) paste0(sprintf("%.1f",x), "%")) +
+  scale_color_manual(values = color_values, breaks = outcome_levels,
+                     guide = guide_legend(nrow = 1, byrow = TRUE)) +
+  scale_x_continuous(breaks = 17:23, limits = c(17,23)) +
+  labs(y = "AR (%)") +
+  theme_clean +
+  theme(legend.position = "none")
+p_infant
+
+p_unplanned <- AR_matage %>%
+  filter(outcome_label == "\u2265 1 Unplanned admission (0-1y)") %>%
+  ggplot(aes(x = matage, y = risk, color = outcome_label)) +
+  geom_point(size = 2, shape = 4, stroke = 1.5, alpha = 1) +
+  geom_smooth(method = "loess", se = FALSE, size = 1.2) +
+  scale_y_continuous(labels = function(x) paste0(sprintf("%.1f",x), "%")) +
+  scale_color_manual(values = color_values, breaks = outcome_levels,
+                     guide = guide_legend(nrow = 1, byrow = TRUE)) +
+  scale_x_continuous(breaks = 17:23, limits = c(17,23)) +
+  labs(y = "AR (%)") +
+  theme_clean +
+  theme(legend.position = "none")
+p_unplanned
+
+p_ae <- AR_matage %>%
+  filter(outcome_label == "\u2265 1 A&E attendance (0-1y)") %>%
+  ggplot(aes(x = matage, y = risk, color = outcome_label)) +
+  geom_point(size = 2, shape = 4, stroke = 1.5, alpha = 1) +
+  geom_smooth(method = "loess", se = FALSE, size = 1.2) +
+  scale_y_continuous(labels = function(x) paste0(sprintf("%.1f",x), "%")) +
+  scale_color_manual(values = color_values, breaks = outcome_levels,
+                     guide = guide_legend(nrow = 1, byrow = TRUE)) +
+  scale_x_continuous(breaks = 17:23, limits = c(17,23)) +
+  labs(x = "Maternal age",y = "AR (%)") +
+  theme_bw(base_size = 14) +
+  theme(
+    panel.grid = element_blank(),
+    legend.position = "bottom",
+    legend.title = element_blank()
+  )
+p_ae
+
+combined <- (p_birth | p_infant) / (p_unplanned | p_ae) + 
+  plot_annotation(title = "") +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom")
+
+combined
