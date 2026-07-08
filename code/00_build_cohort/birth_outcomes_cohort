@@ -28,7 +28,6 @@ sum(is.na(Step1$gestat))
 
 ## Export csv --------------------------------------------------------------
 fwrite(Step1, paste0(data_dir, "Step1.csv"))
-Step1 <- fread(paste0(data_dir,"Step1.csv"))
 
 # Step 2: death ============================================================
 ## load the file -----------------------------------------------------------
@@ -55,7 +54,6 @@ death_count_2 <- Death_v2[age_at_death >= 1 & age_at_death <= 4, .N]
 
 ## Export csv --------------------------------------------------------------
 fwrite(Step2,paste0(data_dir,"Step2.csv"))
-Step2 <- fread(paste0(data_dir,"Step2.csv"))
 
 # Step 3: link HESID-aPMR ==================================================
 ## load the file -----------------------------------------------------------
@@ -67,7 +65,6 @@ sum(is.na(Step3$PupilMatchingRefAnonymous))
 
 ## Export csv --------------------------------------------------------------
 fwrite(Step3,paste0(data_dir,"Step3.csv"))
-Step3 <- fread(paste0(data_dir,"Step3.csv"))
 
 # Step 4: mother-baby linkage ==============================================
 ## load the file -----------------------------------------------------------
@@ -199,7 +196,7 @@ Step4 <- Step4[matage >= 17]
 Step4 <- Step4[Step4$m_bday >= "1995-09-01",]
 
 #keep mom's age at first birth and keep the integer part only
-Step4[,matage_first := as.integer(as.numeric(difftime(min(bday), m_bday, units = "days")) / 365.25), by = m_encrypted_hesid]
+Step4[, matage_first := as.integer(as.numeric(difftime(min(bday), m_bday, units = "days")) / 365.25), by = m_encrypted_hesid]
 Step4 <- Step4[matage_first >= 17]
 
 #missingness doesn't change a lot after selecting mothers gave birth >= 17
@@ -213,12 +210,6 @@ sum(is.na(Step4$imd04_decile_cat_clean))
 Step4[birweit >= 2500, birweit_bin := 0]
 Step4[birweit < 2500, birweit_bin := 1]
 
-#change gestational age to categorical/binary outcome
-#Step4[gestat >= 37, gestat_cat := 0]
-#Step4[gestat >= 32 & gestat <= 36, gestat_cat := 1]
-#Step4[gestat >= 28 & gestat <= 31, gestat_cat := 2]
-#Step4[gestat < 28, gestat_cat := 3]
-
 Step4[gestat >= 37, gestat_bin := 0]
 Step4[gestat <= 36, gestat_bin := 1]
 
@@ -230,49 +221,8 @@ Step4[imd04_decile_cat_clean %in% c(5,6), imd_5 := 3]
 Step4[imd04_decile_cat_clean %in% c(7,8), imd_5 := 4]
 Step4[imd04_decile_cat_clean %in% c(9,10), imd_5 := 5]
 
-#FSM & IMD interaction
-#Step6[PupilMatchingRefAnonymous == "", PupilMatchingRefAnonymous := NA]
-#Step6[,FSMeligible := fifelse(!is.na(PupilMatchingRefAnonymous) & is.na(FSMeligible), "0",
-#                      fifelse(FSMeligible == 1, "1", NA_character_))]
-#Step6[,imd_FSM := fifelse(is.na(imd_5) | is.na(FSMeligible),
-#                          NA_character_,
-#                          paste0("imd_", imd_5, "_FSM_", FSMeligible))]
-#sum(is.na(Step6$imd_FSM))
-
-#change the order
-Step4 <- Step4[,c(1:6,20,7,21,8,22,9:15,23,16:19)]
-
-## mother academic yob -----------------------------------------------------
-#Step6[,a_myob := fifelse(
-#  is.na(bday) | is.na(matage),
-#  NA_character_,
-#  fifelse(
-#    month(bday) %in% 9:12,
-#    paste0(ydob - matage, "/", ydob - matage + 1),
-#    paste0(ydob - matage - 1, "/", ydob - matage)
-#  )
-#)]
-#Step6[,a_myob_group := fifelse(
-#  is.na(a_myob),
-#  NA_character_,
-#  fifelse(a_myob <= "1994/1995", "<=1994/1995", ">=1995/1996")
-#)]
-#Step1 <- Step1[,c(1:5,11:12,6:10)]
-
-#freq_myob <- Step6[, .N, by = .(a_myob)]
-#freq_myob[,prop := round(N / sum(N) * 100, 1)]
-
-#freq_myob_group <- Step6[, .N, by = .(a_myob_group)]
-#freq_myob_group[,prop := round(N / sum(N) * 100, 1)]
-
-#freq_sex1 <- Step1[, .N, by = .(sex)]
-#freq_sex1[,prop := round(N / sum(N) * 100, 1)]
-#freq_sex6 <- Step6[, .N, by = .(sex)]
-#freq_sex6[,prop := round(N / sum(N) * 100, 1)]
-
 ## Export csv --------------------------------------------------------------
 fwrite(Step4, paste0(data_dir, "Step4.csv"))
-Step4 <- fread(paste0(data_dir,"Step4.csv"))
 
 # Step 5: ethnos + hardelid code list ======================================
 ## ethnicity ---------------------------------------------------------------
@@ -280,7 +230,7 @@ Step4 <- fread(paste0(data_dir,"Step4.csv"))
 ETHNOS <- fread(paste0(master_dir, "HES_APC_Ethnos_New_Modal.csv"))
 
 #Select mother's ethnicity
-ETHNOS_select <- ETHNOS[,.(encrypted_hesid,ethnos_description)]
+ETHNOS_select <- ETHNOS[ ,.(encrypted_hesid,ethnos_description)]
 sum(duplicated(ETHNOS_select$encrypted_hesid))
 
 #change columns name to mother's tail
@@ -303,7 +253,7 @@ Step5_ETHNOS[m_ethnos_description %in% c("Chinese (other ethnic group)","Any oth
 #sum(Step5_ETHNOS$m_ethnos_group == "")
 sum(is.na(Step5_ETHNOS$m_ethnos_group))
 
-## diag - from Matt's code -------------------------------------------------
+## diag - from Matthew Jay's code ------------------------------------------
 diagnoses <- fread(paste0(master_dir, "HES_APC_DIAG_combined.csv"),
                    header = T,
                    stringsAsFactors = F)
@@ -441,11 +391,6 @@ Step5[, cc_hardelid_herbert := get_hardelid_herbert_type(bday = bday, m_encrypte
 
 ## Export csv --------------------------------------------------------------
 fwrite(Step5, paste0(data_dir, "Step5.csv"))
-Step5 <- fread(paste0(data_dir,"Step5.csv"))
-
-unique(hardelid_diagnoses$type)
-table(Step5$any_hardelid_herbert)
-table(Step5$mh_hardelid_herbert)
 
 # Step 6: covariates from mother's tail ====================================
 ## load the file -----------------------------------------------------------
@@ -453,7 +398,6 @@ KS4_1 <- fread(paste0(KS4_dir,"KS4Pupil_2002_to_2014.csv"))
 KS4_2 <- fread(paste0(KS4_dir,"KS4Pupil_2015_to_2021.csv"))
 FSM <- fread(paste0(master_dir,"NPD_Census_FSMeligible.csv"))
 SEN <- fread(paste0(master_dir,"NPD_SEN_data_clean/NPD_SEN_provision_data_clean.csv"))
-#lng <- fread(paste0(master_dir,"NPD_Census_Language_LanguageGroupMajor_modal.csv"))
 
 ## KS4 ---------------------------------------------------------------------
 #change NULL to NA
@@ -533,10 +477,6 @@ Step6_FSM <- merge(Step6_KS4,FSM_final,by="m_PupilMatchingRefAnonymous",all.x=TR
 sum(is.na(Step6_FSM$m_FSMeligible))
 Step6_FSM[is.na(m_FSMeligible), m_FSMeligible := 0]
 
-#FSM & IMD interaction
-#Step6_FSM[,imd_mFSM := fifelse(is.na(imd_5), NA_character_,
-#                       paste0("imd_", imd_5, "_mFSM_", m_FSMeligible))]
-
 ## SEN ------------------------------------------------------------------
 sum(is.na(SEN$sen_provision))
 
@@ -578,20 +518,8 @@ sum(is.na(Step6$m_sen_provision))
 
 Step6[is.na(m_sen_provision), m_sen_provision := 0]
 
-## lng ------------------------------------------------------------------
-#names(lng)[1] <- "m_PupilMatchingRefAnonymous"
-#names(lng)[2] <- "m_LanguageGroupMajor"
-
-#change LanguageGroupMajor=3_UNCL(unclassified) to NA
-#lng$m_LanguageGroupMajor[lng$m_LanguageGroupMajor == "3_UNCL"] <- NA
-
-#left join Step6_SEN with lng
-#Step6 <- merge(Step6_SEN,lng,by="m_PupilMatchingRefAnonymous",all.x=TRUE)
-#sum(is.na(Step6$m_LanguageGroupMajor))
-
 ## Export csv --------------------------------------------------------------
 fwrite(Step6, paste0(data_dir, "Step6.csv"))
-Step6 <- fread(paste0(data_dir,"Step6.csv"))
 
 # Step 7: CSC data =========================================================
 ## load the file -----------------------------------------------------------
