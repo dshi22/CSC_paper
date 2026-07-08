@@ -27,7 +27,7 @@ The `00_build_cohort` directory contains scripts used to construct the analytica
 
 The raw data are not included in this repository because they contain confidential individual-level administrative records.
 
-All analyses were conducted using the ECHILD database within a secure research environment. Access to ECHILD data is subject to approval through the ECHILD Data Access Committee. Further information is available on the [ECHILD data access page](https://www.echild.ac.uk/).
+All analyses were conducted using the ECHILD database within a secure research environment. Access to ECHILD data is subject to approval through the ECHILD Data Access Committee. Further information is available on the [ECHILD data access page](https://www.echild.ac.uk/data-access).
 
 ## Reproducibility
 
