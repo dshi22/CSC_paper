@@ -699,5 +699,3 @@ health_out$imd_5 <- factor(health_out$imd_5,levels = c("5","4","3","2","1"))
 
 ## Export csv --------------------------------------------------------------
 fwrite(health_out, paste0(data_dir, "health_out.csv"))
-health_out <- fread(paste0(data_dir,"health_out.csv"))
-health_out[, .N, by = highest_CSC]
