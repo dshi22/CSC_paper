@@ -35,7 +35,6 @@ Step1 <- edu_out
 
 ## Export csv --------------------------------------------------------------
 fwrite(Step1, paste0(data_dir, "Step1.csv"))
-Step1 <- fread(paste0(data_dir,"Step1.csv"))
 
 # Step 2: add EYFSP result =================================================
 ## load the file -----------------------------------------------------------
