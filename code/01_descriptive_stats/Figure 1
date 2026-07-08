@@ -51,12 +51,12 @@ compute_risk_df <- function(df, outcome_vec, dataset_name){
       summarise(
         n_total = n(),
         events = sum(.data[[outvar]] == 1, na.rm = TRUE),
-        .group = "drop"
+        .groups = "drop"
       ) %>%
       rowwise() %>%
       mutate(
-        n_total = floor(n_total / 10 + 0.5) * 10,
-        events = floor(events / 10 + 0.5) * 10,
+        n_total = floor(n_total / 10 + 0.5) * 10, #round counts to the nearest 10 before calculating risks and CIs for disclosure control
+        events = floor(events / 10 + 0.5) * 10, #round counts to the nearest 10 before calculating risks and CIs for disclosure control
         tmp = binom.confint(events, n_total, method="wilson")[1, c("lower","upper","mean")],
         outcome = outvar,
         dataset = dataset_name
@@ -75,7 +75,7 @@ compute_risk_df <- function(df, outcome_vec, dataset_name){
 
 risk_health <- compute_risk_df(health_out, health_out_list, "health_out")
 risk_age1 <- compute_risk_df(health_out_age1, health_out_age1_list, "health_out_age1")
-risk_age1_5 <- compute_risk_df(health_out_age1_5, health_out_age1_5_list, "health_out_age5")
+risk_age1_5 <- compute_risk_df(health_out_age1_5, health_out_age1_5_list, "health_out_age1_5")
 
 AR_CSC <- bind_rows(risk_health,risk_age1,risk_age1_5)
 
@@ -115,13 +115,13 @@ plot_AR_clean <- function(df_sub, y_max = NULL, title){
 }
 
 # Generate each plot
-p1a <- plot_AR(filter(AR_CSC, outcome=="birweit_bin"), 15, "1a. Low birthweight")
-p1b <- plot_AR(filter(AR_CSC, outcome=="gestat_bin"), 15, "1b. Preterm birth")
-p1c <- plot_AR(filter(AR_CSC, outcome=="infant_death"), 1.2, "1c. Infant mortality")
-p1d <- plot_AR(filter(AR_CSC, outcome=="unplanned_admission_1"), 100, "1d. ≥1 Unplanned admission (0-1y)")
-p1e <- plot_AR(filter(AR_CSC, outcome=="unplanned_admission_1_5"), 100, "1e. ≥1 Unplanned admission (1-5y)")
-p1f <- plot_AR(filter(AR_CSC, outcome=="AE_1"), 100, "1f. ≥1 A&E attendance (0-1y)")
-p1g <- plot_AR(filter(AR_CSC, outcome=="AE_5"), 100, "1g. ≥1 A&E attendance (1-5y)")
+p1a <- plot_AR_clean(filter(AR_CSC, outcome=="birweit_bin"), 15, "1a. Low birthweight")
+p1b <- plot_AR_clean(filter(AR_CSC, outcome=="gestat_bin"), 15, "1b. Preterm birth")
+p1c <- plot_AR_clean(filter(AR_CSC, outcome=="infant_death"), 1.2, "1c. Infant mortality")
+p1d <- plot_AR_clean(filter(AR_CSC, outcome=="unplanned_admission_1"), 100, "1d. ≥1 Unplanned admission (0-1y)")
+p1e <- plot_AR_clean(filter(AR_CSC, outcome=="unplanned_admission_1_5"), 100, "1e. ≥1 Unplanned admission (1-5y)")
+p1f <- plot_AR_clean(filter(AR_CSC, outcome=="AE_1"), 100, "1f. ≥1 A&E attendance (0-1y)")
+p1g <- plot_AR_clean(filter(AR_CSC, outcome=="AE_5"), 100, "1g. ≥1 A&E attendance (1-5y)")
 
 # create a custom legend box
 text_sz <- 5.5
