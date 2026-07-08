@@ -5,8 +5,6 @@ data_dir <- "P:/.../.../data/"
 # load packages -----------------------------------------------------------
 library(data.table)
 library(dplyr)
-health_out_age1_5 <- health_out_1_5[matage == 17]
-count <- health_out_age1_5[,.N, by = matage]
 
 # Step 1: subset reached age 5 / dead 1-5 ==================================
 ## load the file -----------------------------------------------------------
@@ -18,7 +16,6 @@ Step1 <- Step1[infant_death != 1]
 
 ## Export csv --------------------------------------------------------------
 fwrite(Step1,paste0(data_dir,"Step1.csv"))
-Step1 <- fread(paste0(data_dir,"Step1.csv"))
 
 # Step 2: unplanned hospital admission (new) ===============================
 ## load the file -----------------------------------------------------------
@@ -50,7 +47,6 @@ Step2[ ,unplanned_admission_1_5 := fifelse(unique_admidate >= 1 | death_1_to_5 =
 
 ## Export csv --------------------------------------------------------------
 fwrite(Step2,paste0(data_dir,"Step2.csv"))
-Step2 <- fread(paste0(data_dir,"Step2.csv"))
 
 # Step 3: A&E admission ====================================================
 ## load the file -----------------------------------------------------------
