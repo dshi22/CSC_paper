@@ -10,8 +10,8 @@ library(dplyr)
 ## load the file -----------------------------------------------------------
 health_out <- fread(paste0(data_dir, "health_out.csv"))
 
-## filter reached age 1 ----------------------------------------------------
-Step1 <- health_out[health_out$bday >= "2012-09-01" & health_out$bday <= "2019-03-31",]
+## Restrict to children who could have complete follow-up to age 1 ---------
+Step1 <- health_out[health_out$bday >= "2012-09-01" & health_out$bday <= "2019-03-31",] #based on the study end date (31 March 2020)
 
 ## Export csv --------------------------------------------------------------
 fwrite(Step1,paste0(data_dir,"Step1.csv"))
@@ -21,8 +21,8 @@ fwrite(Step1,paste0(data_dir,"Step1.csv"))
 HA <- fread(paste0(master_dir, "HES_APC_DIS_ADMI_EPI_combined.csv"))
 
 ## filter ------------------------------------------------------------------
-#exclude birth episode (epitype = 3) and same admidate per person
-HA_exbirth <- HA[epitype != 3][, .SD[1], by = .(encrypted_hesid,admidate)]
+#exclude birth episode (epitype = 3) and retain one record per child per admission date
+HA_exbirth <- HA[epitype != 3][, .SD[1], by = .(encrypted_hesid, admidate)]
 
 #exclude admimeth=11,12,13 (planned admissions)
 HA_unplan <- HA_exbirth[!admimeth %in% c(11,12,13)]
@@ -42,7 +42,7 @@ Step2 <- merge(Step1,HA_final,by="encrypted_hesid",all.x=TRUE)
 Step2[is.na(unique_admidate), unique_admidate := 0]
 
 ## unplanned admission / dead < 1 - final = 1 -----------------------------
-Step2[ ,unplanned_admission_1 := fifelse(unique_admidate >= 1 | infant_death == 1, 1, 0)]
+Step2[ ,unplanned_admission_1 := fifelse(unique_admidate >= 1 | infant_death == 1, 1, 0)] #children who died before age 1 are coded as having the outcome
 
 ## Export csv --------------------------------------------------------------
 fwrite(Step2,paste0(data_dir,"Step2.csv"))
@@ -57,11 +57,11 @@ Step3.0 <- merge(AE,Step2,by="encrypted_hesid",all.x=TRUE)
 
 #calculate baby's age at admission via arrival date and bday
 AE_age <- Step3.0 %>%
-  mutate(attendence_age = as.numeric(difftime(arrivaldate,bday,units = 'days'))/365.25)
+  mutate(attendance_age = as.numeric(difftime(arrivaldate,bday,units = 'days')) / 365.25)
 
 #select baby's age < 1
 AE_age_1 <- AE_age  %>%
-  filter(attendence_age < 1)
+  filter(attendance_age < 1)
 
 #calculate total A&E times via rows per person
 AE_final <- AE_age_1 %>%
@@ -72,11 +72,11 @@ AE_final <- AE_age_1 %>%
   select(encrypted_hesid,AE_time)
 
 ## merge -------------------------------------------------------------------
-Step3 <- merge(Step2,AE_final,by="encrypted_hesid",all.x=TRUE)
+Step3 <- merge(Step2, AE_final, by="encrypted_hesid", all.x=TRUE)
 Step3[is.na(AE_time), AE_time := 0]
 
 ## AE / dead < 1 - AE = 1 --------------------------------------------------
-Step3[ ,AE_1 := fifelse(AE_time >= 1 | infant_death == 1, 1, 0)]
+Step3[ , AE_1 := fifelse(AE_time >= 1 | infant_death == 1, 1, 0)] #children who died before age 1 are coded as having the outcome
 
 ## Export csv --------------------------------------------------------------
 fwrite(Step3, paste0(data_dir, "health_out_age1.csv"))
