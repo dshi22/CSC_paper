@@ -57,10 +57,10 @@ fwrite(Step2,paste0(data_dir,"Step2.csv"))
 
 # Step 3: link HESID-aPMR ==================================================
 ## load the file -----------------------------------------------------------
-HES_NPD <- fread(paste0(master_dir,"NPD_HES_Linkage_Spine.csv"))[,.(PupilMatchingRefAnonymous,encrypted_hesid)]
+NPD_HES <- fread(paste0(master_dir,"NPD_HES_Linkage_Spine.csv"))[,.(PupilMatchingRefAnonymous,encrypted_hesid)]
 
 ## merge ------------------------------------------------------------------
-Step3 <- merge(Step2,HES_NPD,by="encrypted_hesid",all.x=TRUE)
+Step3 <- merge(Step2,NPD_HES,by="encrypted_hesid",all.x=TRUE)
 sum(is.na(Step3$PupilMatchingRefAnonymous))
 
 ## Export csv --------------------------------------------------------------
@@ -74,7 +74,7 @@ NPD_HES <- fread(paste0(master_dir,"NPD_HES_Linkage_Spine.csv"))[,.(PupilMatchin
 DOB <- fread(paste0(master_dir,"HES_APC_mybirth_combined.csv"))
 
 ## add approximate mothers yob ---------------------------------------------
-Step6.0[,a_myob := fifelse(
+Step4.0[,a_myob := fifelse(
   is.na(bday) | is.na(matage),
   NA_character_,
   fifelse(
@@ -84,18 +84,18 @@ Step6.0[,a_myob := fifelse(
   )
 )]
 
-Step6.0[,a_myob_group := fifelse(
+Step4.0[,a_myob_group := fifelse(
   is.na(a_myob),
   NA_character_,
   fifelse(a_myob <= "1994/1995", "<=1994/1995", ">=1995/1996")
 )]
 
 #change "Step3" to later data to roughly calculate mother's year of birth
-summary_table <- Step6.0[, .(
+summary_table <- Step4.0[, .(
   n = .N,
-  pct = paste0(round(.N / nrow(Step6.0) * 100), "%")
+  pct = paste0(round(.N / nrow(Step4.0) * 100), "%")
 ), by = a_myob_group]
-unique(Step6.0$a_myob)
+unique(Step4.0$a_myob)
 
 ## baby HESID-TPI merge ----------------------------------------------------
 names(HES_TPI)[1] <- "tokenid"
@@ -153,21 +153,21 @@ sum(is.na(m_HES_NPD$gestat))
 sum(is.na(m_HES_NPD$birweit))
 
 #missingness: matage_clean to matage, gestat_clean to gestat, birweit_clean to birweit
-Step6.0 <- m_HES_NPD[,matage := fifelse(is.na(matage) & !is.na(matage_clean),matage_clean,matage)][,matage_clean := NULL]
-Step6.0 <- Step6.0[,gestat := fifelse(is.na(gestat) & !is.na(gestat_clean),gestat_clean,gestat)][,gestat_clean := NULL]
-Step6.0 <- Step6.0[,birweit := fifelse(is.na(birweit) & !is.na(birweit_clean),birweit_clean,birweit)][,birweit_clean := NULL]
+Step4.0 <- m_HES_NPD[,matage := fifelse(is.na(matage) & !is.na(matage_clean),matage_clean,matage)][,matage_clean := NULL]
+Step4.0 <- Step4.0[,gestat := fifelse(is.na(gestat) & !is.na(gestat_clean),gestat_clean,gestat)][,gestat_clean := NULL]
+Step4.0 <- Step4.0[,birweit := fifelse(is.na(birweit) & !is.na(birweit_clean),birweit_clean,birweit)][,birweit_clean := NULL]
 
 #after merging values to NA
-sum(is.na(Step6.0$matage))
-sum(is.na(Step6.0$gestat))
-sum(is.na(Step6.0$birweit))
+sum(is.na(Step4.0$matage))
+sum(is.na(Step4.0$gestat))
+sum(is.na(Step4.0$birweit))
 
 ## mothers gave birth >=17 -------------------------------------------------
 #add mother's birthday
 names(DOB)[1] <- "m_encrypted_hesid"
 names(DOB)[2] <- "m_bday"
 DOB$m_cydob <- as.integer(format(DOB$m_bday,"%Y"))
-Step4 <- merge(Step6.0,DOB,by="m_encrypted_hesid",all.x=TRUE)
+Step4 <- merge(Step4.0,DOB,by="m_encrypted_hesid",all.x=TRUE)
 
 #missingness: matage_baby to matage
 sum(is.na(Step4$bday))
@@ -244,8 +244,8 @@ Step5_ETHNOS <- merge(Step4,ETHNOS_select,by="m_encrypted_hesid",all.x=TRUE)
 #sum(Step5_ETHNOS$m_ethnos_description == "")
 sum(is.na(Step5_ETHNOS$m_ethnos_description))
 
-#ethnicity: grouped
-Step5_ETHNOS[m_ethnos_description %in% c("Bangladeshi (Asian or Asian British)","Indian (Asian or Asian British)","Pakistani (Asian or Asian British)","Any other Asian Background"), m_ethnos_group := "Asian or Asian British"]
+#ethnicity: grouped. Ethnicity categories follow the labels used in the source ETHNOS dataset.
+Step5_ETHNOS[m_ethnos_description %in% c("Bangladeshi (Asian or Asian British)","Indian (Asian or Asian British)","Pakistani (Asian or Asian British)","Any other Asian Background"), m_ethnos_group := "Asian or Asian British"] 
 Step5_ETHNOS[m_ethnos_description %in% c("African (Black or Black British)","Carribean (Black or Black British)","Any other Black Background"), m_ethnos_group := "Black or Black British"]
 Step5_ETHNOS[m_ethnos_description %in% c("White and Asian (mixed)","White and Black African (mixed)","White and Black Carribean (mixed)","Any other Mixed Background"), m_ethnos_group := "Mixed"]
 Step5_ETHNOS[m_ethnos_description %in% c("British (White)","Irish (White)","Any other White Background"), m_ethnos_group := "White"]
@@ -358,7 +358,7 @@ table(hardelid_herbert_diagnoses$type, useNA = "always")
 
 #change specific types to general types
 hardelid_herbert_diagnoses[type %in% c("Accidents","Drug or Alcohol misuse","Self-harm","Violence"), type := "Adversity"]
-hardelid_herbert_diagnoses[type %in% c("Cancer/Blood","Cardiovascular","Self-harm","Violence","Chronic infections","Codes indicating non-specific chronic condition","Metabolic/endocrine/digestive/renal/genitourinary","Musculoskeletal/skin","Neurological","Respiratory"), type := "Chronic Conditions"]
+hardelid_herbert_diagnoses[type %in% c("Cancer/Blood","Cardiovascular","Chronic infections","Codes indicating non-specific chronic condition","Metabolic/endocrine/digestive/renal/genitourinary","Musculoskeletal/skin","Neurological","Respiratory"), type := "Chronic Conditions"]
 
 ## filter ------------------------------------------------------------------
 #drop diagnoses that occurred >2 years before the birth
