@@ -82,7 +82,7 @@ AR_CSC <- bind_rows(risk_health,risk_age1,risk_age1_5)
 ## Export csv --------------------------------------------------------------
 fwrite(AR_CSC, paste0(data_dir, "AR_CSC.csv"))
 
-## Draw the Figure ---------------------------------------------------------
+## Draw the figure ---------------------------------------------------------
 # Fix the order of the x-axis and relabel
 AR_CSC$highest_CSC <- tolower(as.character(AR_CSC$highest_CSC))
 AR_CSC$highest_CSC <- factor(AR_CSC$highest_CSC,
