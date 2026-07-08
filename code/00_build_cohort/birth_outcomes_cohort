@@ -679,12 +679,6 @@ levels(Step7_CSC$highest_CSC)
 
 health_out <- Step7_CSC
 
-# something else ===========================================================
-## don't need it: add singleton / multiple info-----------------------------
-#health_out[, multiple_children := ifelse(.N > 1, 1, 0), by = m_PupilMatchingRefAnonymous]
-#health_out <- health_out[,c(1:8,38,9:37)]
-health_out[, multiple_children := NULL]
-
 ## add child-level variable: first / other birth ---------------------------
 sum(is.na(health_out$bday))
 health_out <- health_out[order(m_encrypted_hesid, bday)]
