@@ -15,7 +15,6 @@ Step1 <- health_out[health_out$bday >= "2012-09-01" & health_out$bday <= "2019-0
 
 ## Export csv --------------------------------------------------------------
 fwrite(Step1,paste0(data_dir,"Step1.csv"))
-Step1 <- fread(paste0(data_dir,"Step1.csv"))
 
 # Step 2: unplanned hospital admission (new) ===============================
 ## load the file -----------------------------------------------------------
@@ -47,7 +46,6 @@ Step2[ ,unplanned_admission_1 := fifelse(unique_admidate >= 1 | infant_death == 
 
 ## Export csv --------------------------------------------------------------
 fwrite(Step2,paste0(data_dir,"Step2.csv"))
-Step2 <- fread(paste0(data_dir,"Step2.csv"))
 
 # Step 3: A&E admission ====================================================
 ## load the file -----------------------------------------------------------
