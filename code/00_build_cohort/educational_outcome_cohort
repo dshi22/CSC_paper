@@ -58,6 +58,3 @@ edu_out[is.na(eyfsp_gld) & census == 0, eyfsp_gld := "not_enrolled"]
 
 ## Export csv --------------------------------------------------------------
 fwrite(edu_out, paste0(data_dir, "edu_out.csv"))
-edu_out <- fread(paste0(data_dir,"edu_out.csv"))
-
-edu_out[, .N, by = highest_CSC]
