@@ -82,4 +82,3 @@ Step3[ ,AE_1 := fifelse(AE_time >= 1 | infant_death == 1, 1, 0)]
 
 ## Export csv --------------------------------------------------------------
 fwrite(Step3, paste0(data_dir, "health_out_age1.csv"))
-health_out_age1 <- fread(paste0(data_dir,"health_out_age1.csv"))
