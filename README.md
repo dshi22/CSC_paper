@@ -4,7 +4,7 @@ This repository contains the R code used in the following study:
 
 Shi D, Jay M, Gilbert R, Vousden N, Mc Grath-Lone L, Harron K. *Maternal social care experience during adolescence and their children’s early health and educational outcomes*.
 
-The analyses were conducted using [ECHILD](https://www.echild.ac.uk/) (Education and Child Health Insights from Linked Data) resource, a national linked administrative dataset combining health, education, and children's social care records in England.
+The analyses were conducted using the [ECHILD](https://www.echild.ac.uk/) (Education and Child Health Insights from Linked Data) resource, a national linked administrative dataset combining health, education, and children's social care records in England.
 
 ## Repository structure
 
