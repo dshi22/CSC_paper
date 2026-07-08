@@ -8,11 +8,11 @@ The birth outcomes cohort serves as the parent cohort for all subsequent analyse
 
 2. `health_outcomes_age1_cohort`
    - Subsets the main cohort to children with complete follow-up to age 1.
-   - Used for infant mortality, unplanned hospital admissions, and A&E attendances within the first year of life.
+   - Used for analyses of infant mortality, unplanned hospital admissions, and A&E attendances within the first year of life.
 
 3. `health_outcomes_age1_5_cohort`
    - Further restricts the cohort to children with complete follow-up to age 5.
    - Used for analyses of unplanned hospital admissions and A&E attendances between ages 1 and 5 years.
 
 4. `educational_outcome_cohort`
-   - Further restricts the cohort and derives educational variables required for school readiness analyses at age 5.
+   - Further restricts the cohort and derives the educational variables required for school readiness analyses at age 5.
