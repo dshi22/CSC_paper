@@ -751,7 +751,7 @@ EYFSP$m_ethnos_group <- relevel(EYFSP$m_ethnos_group, ref = "White")
 EYFSP$imd_5 <- factor(EYFSP$imd_5,levels = c("5","4","3","2","1"))
 
 ## select variables --------------------------------------------------------
-model_edu <- EYFSP[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,eyfsp_gld,sex,imd_5,m_ethnos_group,matage_bin,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
+model_edu <- EYFSP[,.(encrypted_hesid,m_encrypted_hesid,highest_CSC,eyfsp_gld,sex,imd_5,m_ethnos_group,first_child,matage_bin,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin)]
 
 #randomly keep mother's one child
 model_edu_unique <- model_edu %>%
