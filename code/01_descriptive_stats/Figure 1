@@ -152,4 +152,4 @@ combined_final <- p1a + p1b + p1c +
   p1f + p1g + pleg + 
   plot_layout(ncol = 3, nrow = 3, heights = c(1, 1, 1))
 
-ggsave("final_manuscript_plot_1.png", combined_final, width = 14, height = 12, dpi = 600)
+ggsave("Figure_1.png", combined_final, width = 14, height = 12, dpi = 600)
