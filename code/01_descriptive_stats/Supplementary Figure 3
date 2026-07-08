@@ -5,8 +5,15 @@ Below is the R code used to generate Supplementary Figure 3.
 ## load packages -----------------------------------------------------------
 library(readr)
 library(dplyr)
+library(data.table)
 library(tidyr)
+library(ggpubr)
 library(ggplot2)
+
+## load the file -----------------------------------------------------------
+health_out <- fread(paste0(data_dir,"health_out.csv"))
+health_out_age1 <- fread(paste0(data_dir,"health_out_age1.csv"))
+health_out_age1_5 <- fread(paste0(data_dir,"health_out_age1_5.csv"))
 
 ## define outcomes ---------------------------------------------------------
 #define outcomes
@@ -15,8 +22,8 @@ health_out_age1_list <- c("infant_death","unplanned_admission_1","AE_1")
 health_out_age1_5_list <- c("unplanned_admission_1_5","AE_5")
 
 #general function while excluded NA per outcome
-compute_absolute_risk <- function(df,outcome_col){
-  round10 <- function(x) floor(x / 10 + 0.5) * 10
+compute_absolute_risk <- function(df, outcome_col){
+  round10 <- function(x) floor(x / 10 + 0.5) * 10 # apply disclosure control by rounding counts to the nearest 10 before calculating risks
   df_clean <- df %>%
     select(matage, all_of(outcome_col)) %>%
     filter(!is.na(.data[[outcome_col]]))
@@ -25,7 +32,7 @@ compute_absolute_risk <- function(df,outcome_col){
     summarise(
       denom = n(),
       events = sum(.data[[outcome_col]] == 1),
-      .group = "drop"
+      .groups = "drop"
     ) %>%
     mutate(
       denom = round10(denom),
@@ -49,7 +56,6 @@ AR_matage <- bind_rows(birth_results,y1_results,y1_5_results) %>%
 
 ## Export csv --------------------------------------------------------------
 fwrite(AR_matage, paste0(data_dir, "AR_matage.csv"))
-AR_matage <- fread(paste0("D:/.../.../.../.../AR_matage.csv"))
 
 ## draw the figure --------------------------------------------------------
 AR_matage <- AR_matage %>%
