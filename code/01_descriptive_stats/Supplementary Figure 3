@@ -67,6 +67,7 @@ AR_matage <- AR_matage %>%
   filter(!outcome %in% c("unplanned_admission_1_5","AE_5"))
 
 outcome_levels <- c("Low birth weight","Preterm birth","Infant mortality","\u2265 1 Unplanned admission (0-1y)","\u2265 1 A&E attendance (0-1y)")
+
 color_values <- c(
   "Low birth weight" = "#1B9E77",
   "Preterm birth" = "#D95F02",
@@ -88,6 +89,7 @@ theme_clean <- theme_bw(base_size = 14) +
     axis.ticks = element_line(color = "black", linewidth = 0.5)
   )
 
+# draw individual figures
 p_birth <- AR_matage %>%
   filter(outcome_label %in% c("Low birth weight","Preterm birth")) %>%
   ggplot(aes(x = matage, y = risk, color = outcome_label)) +
