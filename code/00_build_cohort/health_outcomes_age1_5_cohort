@@ -87,11 +87,3 @@ Step3[ ,AE_5 := fifelse(AE_time >= 1 | death_1_to_5 == 1, 1, 0)]
 fwrite(Step3, paste0(data_dir, "health_out_age1_5.csv"))
 health_out_age1_5 <- fread(paste0(data_dir,"health_out_age1_5.csv"))
 health_out_age1_5[, .N, by = infant_death] #excluded all death before age 1
-
-# something else ===========================================================
-## don't need singleton / multiple info-------------------------------------
-health_out_age1_5[, multiple_children := NULL]
-
-## add child-level variable: first / other birth ---------------------------
-health_out_age1_5 <- health_out_age1_5[order(m_encrypted_hesid, bday)]
-health_out_age1_5[, first_child := as.integer(seq_len(.N) == 1), by = m_encrypted_hesid]
