@@ -8,21 +8,22 @@ data_dir <- "P:/.../.../data/"
 # load packages -----------------------------------------------------------
 library(data.table)
 library(dplyr)
+library(tidyr)
 
 # load the file -----------------------------------------------------------
 health_out <- fread(paste0(data_dir, "health_out.csv"))
-health_out_unique <- health_out[,.SD[1],by="m_encrypted_hesid"]
+health_out_unique <- health_out[ ,.SD[1], by="m_encrypted_hesid"] #retain one record per mother for maternal-level characteristics
 health_out[, .N, by = highest_CSC]
 health_out_unique[, .N, by = highest_CSC]
 
 # descriptive statistics - mean (SD) ---------------------------------------
 # total
-health_out_unique[,.(mean_matage = round(mean(matage_first, na.rm = TRUE), 2),
+health_out_unique[ ,.(mean_matage = round(mean(matage_first, na.rm = TRUE), 2),
                      sd_matage = round(sd(matage_first, na.rm = TRUE), 2),
                      n= .N),]
 
 # by highest CSC
-health_out_unique[,.(mean_matage = round(mean(matage_first, na.rm = TRUE),2),
+health_out_unique[ ,.(mean_matage = round(mean(matage_first, na.rm = TRUE),2),
                      sd_matage = round(sd(matage_first, na.rm = TRUE),2),
                      n= .N),
                   by = highest_CSC]
@@ -32,13 +33,10 @@ health_out <- health_out[,.(sex,imd_5,matage_bin,first_child,highest_CSC,birweit
 health_out_unique <- health_out_unique[,.(m_ethnos_group,adv_hardelid_herbert,mh_hardelid_herbert,cc_hardelid_herbert,m_FSMeligible,m_sen_provision,KS4_bin,highest_CSC,matage_first)]
 
 # descriptive statistics - N (%) -------------------------------------------
-library(dplyr)
-library(tidyr)
-
 npct_fmt <- function(x){
   tab <- table(x, useNA = "ifany")
   pct <- prop.table(tab) * 100
-  tab_rounded <- floor(tab / 10 + 0.5) * 10
+  tab_rounded <- floor(tab / 10 + 0.5) * 10 #counts are rounded to the nearest 10 and percentages to whole numbers for disclosure control
   pct_rounded <- floor(pct + 0.5)
   out <- sapply(seq_along(tab), function(i){
     label <- names(tab)[i]
