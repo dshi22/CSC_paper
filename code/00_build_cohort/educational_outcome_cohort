@@ -56,10 +56,6 @@ edu_out$eyfsp_gld <- as.character(edu_out$eyfsp_gld)
 edu_out[is.na(eyfsp_gld) & census == 1, eyfsp_gld := "enrolled_not_sit"]
 edu_out[is.na(eyfsp_gld) & census == 0, eyfsp_gld := "not_enrolled"]
 
-## add child-level variable: first / other birth ---------------------------
-edu_out <- edu_out[order(m_encrypted_hesid, bday)]
-edu_out[, first_child := as.integer(seq_len(.N) == 1), by = m_encrypted_hesid]
-
 ## Export csv --------------------------------------------------------------
 fwrite(edu_out, paste0(data_dir, "edu_out.csv"))
 edu_out <- fread(paste0(data_dir,"edu_out.csv"))
