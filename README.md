@@ -12,10 +12,10 @@ The analyses were conducted using the [ECHILD](https://www.echild.ac.uk/) (Educa
 
 The `00_build_cohort` directory contains scripts used to construct the analytical cohorts for:
 
-- `birth_outcomes_cohort` – birth outcomes;
-- `health_outcomes_age1_cohort` – health outcomes during the first year of life;
-- `health_outcomes_age1_5_cohort` – health outcomes between ages 1 and 5 years;
-- `educational_outcomes_cohort` – school readiness at age 5.
+- `00_01_birth_outcomes_cohort` – birth outcomes;
+- `00_02_health_outcomes_age1_cohort` – health outcomes during the first year of life;
+- `00_03_health_outcomes_age1_5_cohort` – health outcomes between ages 1 and 5 years;
+- `00_04_educational_outcomes_cohort` – school readiness at age 5.
 
 ### Analyses
 
